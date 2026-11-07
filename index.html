@@ -1,0 +1,1664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A browser game for AP Biology: run a cell's energy supply through glycolysis, fermentation, the Krebs cycle and the electron transport chain.">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Glycolysis Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a cytoplasm factory floor. Gauges on top, the glycolysis machine in the middle, the open cytoplasm below where reactions play out step by step. Single deliberate light look. */
+:root{
+  color-scheme: light;
+  --cyto:#E6F1EC; --floor:#F6FAF7; --paper:#FFFFFF; --ink:#15303A; --muted:#5B7480; --line:#C7DAD2;
+  --glu:#E39B2B; --atp:#E8544A; --nad:#7A5CF0; --pyr:#1F9E80; --lac:#7E95A6; --acet:#D3AE2E; --co2:#A9B6BD; --eth:#5B9BD9;
+  --adp:#EFA9A2; --o2:#8CC6E6; --here:#FFF1D6; --acoa:#8E9A2F; --fad:#C2459B; --hp:#2BA6C9; --h2o:#5AA9D6;
+  --atomC:#22343B; --atomO:#E0473D; --atomP:#F2A33A; --atomE:#FFD23F; --atomA:#3E6170;
+  --good:#1F9E80; --warn:#D9822B; --bad:#C8413A;
+  --display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+html,body{background:var(--cyto);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 40px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--nad);outline-offset:2px}
+.btn{border:0;border-radius:12px;padding:11px 16px;font-weight:700;background:var(--ink);color:var(--floor);box-shadow:0 3px 0 #0a1b21}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #0a1b21}
+.btn[disabled]{opacity:.4;cursor:not-allowed;transform:none}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.btn.cool{background:#2F7FC4;box-shadow:0 3px 0 #1d5688;padding:8px 12px}
+.btn.warnb{background:var(--bad);box-shadow:0 3px 0 #8a2a25}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* Molecule art */
+svg.mol{display:block;flex:none;overflow:visible}
+.aC{fill:var(--atomC)} .aO{fill:var(--atomO)} .aH{fill:var(--paper);stroke:var(--atomC);stroke-width:1.2}
+.aP{fill:var(--atomP);stroke:#B86F12;stroke-width:1} .aE{fill:var(--atomE);stroke:#B98A00;stroke-width:1}
+.aA{fill:var(--atomA)} .aN{fill:var(--nad)} .aSlot{fill:none;stroke:var(--nad);stroke-width:1.4;stroke-dasharray:2.4 2}
+.bond{stroke:var(--atomC);stroke-width:1.8;stroke-linecap:round}
+.aT{fill:var(--paper);font:700 10px var(--body);text-anchor:middle}
+
+/* Home */
+.hero{padding:10px 0 4px}
+.hero h1{font-size:clamp(34px,9vw,48px);font-weight:800;line-height:1}
+.hero h1 span{color:var(--atp)}
+.hero p{color:var(--muted);margin:8px 0 0;max-width:48ch}
+.levels{display:flex;flex-direction:column;gap:10px}
+.lvcard{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;text-align:left;background:var(--floor);border:2px solid var(--line);border-radius:14px;padding:12px 14px}
+.lvcard[disabled]{opacity:.5;cursor:not-allowed}
+.lvnum{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:20px;background:var(--cyto);border:2px solid var(--line)}
+.lvcard h3{font-size:18px}
+.lvcard p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.stars{font-size:16px;letter-spacing:2px;color:var(--line);white-space:nowrap}
+.stars b{color:var(--glu);font-weight:400}
+.panel{background:var(--floor);border:2px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.panel h3{font-size:17px}
+.panel p{margin:0;color:var(--muted);font-size:14px}
+
+/* Map */
+.map{width:100%;max-width:440px;height:auto;display:block;margin:0 auto}
+.map .reg{fill:var(--paper);stroke:var(--line);stroke-width:1.5}
+.map .reg.locked{fill:var(--floor);stroke-dasharray:5 4}
+.map .rl{font:700 10px var(--body);fill:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.map .tier{font:700 10px var(--body);fill:var(--muted);text-anchor:end}
+.map .mbox rect{fill:var(--paper);stroke:var(--ink);stroke-width:1.5}
+.map .mbox text{text-anchor:middle;fill:var(--ink)}
+.map .mbox .m1{font:800 11px var(--display)}
+.map .mbox .m2{font:400 9.5px var(--body);fill:var(--muted)}
+.map .mbox.locked rect{fill:var(--floor);stroke:var(--line);stroke-dasharray:4 3}
+.map .mbox.locked .m1{fill:var(--muted)}
+.map .mbox.here rect{fill:var(--here);stroke:var(--glu);stroke-width:3}
+.map .mbox.helper rect{fill:var(--paper);stroke:var(--glu);stroke-width:2;stroke-dasharray:5 3}
+.map .youhere.helper rect{fill:var(--muted)}
+.mapnote{margin:0;font-size:14px;color:var(--ink);background:var(--here);border-radius:10px;padding:8px 10px}
+.map .youhere rect{fill:var(--glu)} .map .youhere text{font:800 8.5px var(--body);fill:var(--paper);text-anchor:middle;letter-spacing:.06em}
+.map .arr{stroke:var(--muted);stroke-width:1.6;fill:none}
+.map .ahead{fill:var(--muted)}
+.map .al{font:700 9px var(--body);fill:var(--muted)}
+
+/* HUD */
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.top h2{font-size:19px;text-align:center;flex:1;min-width:0}
+.top .btn{padding:8px 11px;font-size:14px}
+.goalbox{background:var(--floor);border:2px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.goalrow{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.bar{height:10px;border-radius:6px;background:var(--cyto);overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--atp);border-radius:6px;transition:width .3s}
+.tanks{display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:8px}
+.tank{background:var(--floor);border:2px solid var(--line);border-radius:12px;padding:6px 9px;display:flex;flex-direction:column;gap:0;min-width:0}
+.tank .tl{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden}
+.tank .v{font-family:var(--mono);font-weight:600;font-size:21px;font-variant-numeric:tabular-nums}
+.tank.low .v{color:var(--bad)}
+.bump{animation:bump .4s ease}
+@keyframes bump{40%{transform:scale(1.07)}}
+.carrier{background:var(--floor);border:2px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.carrier .row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dots{display:flex;gap:6px;flex-wrap:wrap}
+.dots span{width:20px;height:20px;border-radius:50%;border:2.5px solid var(--nad);background:var(--paper)}
+.dots span.full{background:var(--nad);box-shadow:inset 0 0 0 4px var(--nad),inset 0 0 0 10px var(--atomE)}
+.dots span.busy{border-style:dashed;opacity:.55}
+.carrier.empty{border-color:var(--bad)}
+.legend{font-size:12px;color:var(--muted)}
+.extras{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:8px;background:var(--floor);border:2px solid var(--line);border-radius:12px;padding:7px 10px;flex:1 1 160px;min-width:0}
+.chip .sub{font-size:12px;color:var(--muted)}
+.chip.pulse{border-color:var(--atp)}
+.therm{flex:1;min-width:50px;height:10px;border-radius:6px;background:linear-gradient(90deg,#4C8FD6 0%,var(--good) 35%,var(--warn) 70%,var(--bad) 100%);position:relative}
+.therm i{position:absolute;top:-4px;width:4px;height:18px;background:var(--ink);border-radius:2px;transform:translateX(-50%)}
+
+/* Machines */
+.machines{display:flex;gap:8px}
+.machine{flex:1 1 0;min-width:0;background:var(--floor);border:2px solid var(--line);border-bottom-width:5px;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.machine.running{border-color:var(--good)}
+.machine.waiting{border-color:var(--warn)}
+.machine.broken{border-color:var(--bad);background:#FBEDEC}
+.mhead{display:flex;justify-content:space-between;align-items:baseline;gap:6px;flex-wrap:wrap}
+.machine h3{font-size:16px}
+.status{font-size:12px;font-weight:700;color:var(--muted)}
+.machine.waiting .status{color:var(--warn)}
+.machine.broken .status{color:var(--bad)}
+.machine.running .status{color:var(--good)}
+.stages{display:flex;align-items:center;justify-content:space-between;gap:2px}
+.stg{display:flex;flex-direction:column;align-items:center;gap:2px;opacity:.3;transition:opacity .25s;min-width:0;flex:1}
+.stg.on{opacity:1}
+.stg small{font-size:10px;color:var(--muted);text-align:center;line-height:1.15}
+.stg .pairsv{display:flex;flex-direction:column;gap:1px}
+.sarr{color:var(--muted);font-weight:700}
+.prog{height:8px;border-radius:4px;background:var(--cyto);overflow:hidden;position:relative}
+.prog i{display:block;height:100%;background:var(--good);width:0}
+.prog b{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--floor)}
+.phases{display:flex;justify-content:space-between;gap:6px;font-size:10px;color:var(--muted)}
+.phases span.on{color:var(--ink);font-weight:700}
+.tray{min-height:32px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:center}
+.grp{display:inline-flex;align-items:center;gap:4px;padding:3px 9px 3px 5px;border-radius:999px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 18%,var(--paper));font-weight:700;font-size:13px;white-space:nowrap;animation:pop .3s ease both}
+@keyframes pop{from{transform:scale(.4);opacity:0}}
+
+/* Cytoplasm field and level 1 stream */
+.fieldhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.field,.stream{position:relative;border-radius:16px;overflow:hidden;border:2px solid var(--line);background:radial-gradient(circle at 20% 30%,rgba(122,92,240,.06),transparent 40%),radial-gradient(circle at 80% 70%,rgba(31,158,128,.07),transparent 45%),var(--floor)}
+.field{height:300px}
+.stream{height:240px;background:repeating-linear-gradient(90deg,transparent 0 38px,rgba(21,48,58,.05) 38px 40px),var(--floor)}
+.tok{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:4px 11px 4px 6px;border-radius:999px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 18%,var(--paper));color:var(--ink);font-weight:700;font-size:14px;white-space:nowrap;box-shadow:0 3px 0 rgba(21,48,58,.16);touch-action:manipulation}
+.tok.sel{box-shadow:0 0 0 4px var(--ink),0 3px 0 rgba(21,48,58,.16)}
+.tok.fade{opacity:.4}
+.tok.busy{pointer-events:none;z-index:3}
+.tok.moving{transition:transform .45s cubic-bezier(.4,0,.2,1)}
+.tok.glow{box-shadow:0 0 0 4px var(--atomE),0 3px 0 rgba(21,48,58,.16)}
+.tok.swap{animation:pop .35s ease}
+.tok.wrong{border-color:var(--bad);background:#FBE3E1}
+.rxcap{position:absolute;z-index:4;background:var(--ink);color:var(--floor);font-size:12px;font-weight:700;padding:5px 9px;border-radius:8px;max-width:240px;line-height:1.3;animation:pop .25s ease both;pointer-events:none}
+.packet{position:absolute;z-index:5;pointer-events:none}
+.hint{background:#FFF4E2;border:2px solid #F0CF96;border-radius:12px;padding:10px 12px;font-size:14px}
+.msg{min-height:40px;font-size:14px;color:var(--muted);text-align:center}
+.msg.bad{color:var(--bad);font-weight:700}
+.msg.good{color:var(--good);font-weight:700}
+.rxbox{background:var(--floor);border:2px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.rx{display:flex;flex-direction:column;gap:3px;padding:6px 8px;border-radius:10px;background:var(--paper)}
+.rx strong{font-size:13px}
+.rx.unknown{background:transparent;border:2px dashed var(--line);color:var(--muted)}
+.rx.new{animation:newrx 1.6s ease}
+@keyframes newrx{0%,40%{background:var(--here);box-shadow:0 0 0 3px var(--glu)}}
+.eq{display:flex;flex-wrap:wrap;align-items:center;gap:3px 5px;font-size:13px}
+.term{display:inline-flex;align-items:center;gap:3px;font-weight:700;white-space:nowrap}
+.op{color:var(--muted);font-weight:700}
+.atomkey{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}
+.atomkey span{display:inline-flex;align-items:center;gap:4px}
+.order{background:var(--floor);border:2px solid var(--line);border-bottom-width:5px;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.orderhead{display:flex;justify-content:space-between;align-items:center}
+.streak{font-family:var(--display);font-weight:800;color:var(--glu)}
+.need{display:flex;gap:10px;flex-wrap:wrap}
+.needgrp{flex:1 1 90px;display:flex;flex-direction:column;gap:6px;background:var(--cyto);border-radius:10px;padding:8px 10px}
+.ndots{display:flex;gap:6px}
+.ndots span{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--c)}
+.ndots span.full{background:var(--c)}
+.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* Tier 2: mitochondrion */
+.aF{fill:var(--fad)} .aHp{fill:var(--hp)} .aT.sm{font-size:7.5px}
+.tierhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:6px}
+.tierhead h3{font-size:20px}
+.dots.fad span{border-color:var(--fad);border-radius:5px}
+.dots.fad span.full{background:var(--fad);box-shadow:inset 0 0 0 4px var(--fad),inset 0 0 0 10px var(--atomE)}
+.kbody{display:flex;gap:10px;align-items:center}
+.recipe{font-size:12px;color:var(--muted)}
+.etc{background:var(--floor);border:2px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.ims{background:color-mix(in srgb,var(--hp) 10%,var(--paper));padding:8px 10px;display:flex;flex-direction:column;gap:5px;min-height:62px}
+.imsrow{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.hdots{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
+.hdots i{width:8px;height:8px;border-radius:50%;background:var(--hp)}
+.membrane{position:relative;display:flex;gap:4px;padding:8px 6px;background:repeating-linear-gradient(90deg,#F2E2C0 0 6px,#E8D2A2 6px 8px)}
+.cx{flex:1 1 0;min-width:0;background:var(--paper);border:2px solid var(--ink);border-radius:10px;padding:5px 3px;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;transition:box-shadow .2s}
+.cx b{font-family:var(--display);font-size:15px;line-height:1.1}
+.cx small{font-size:9.5px;color:var(--muted);line-height:1.15}
+.cx.syn{flex:1.5 1 0;border-color:var(--atp)}
+.cx.syn b{font-size:12px}
+.cx.hot{box-shadow:0 0 0 4px var(--atomE)}
+.cx.full{border-color:var(--bad);background:#FBEDEC}
+.ewait{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;min-height:10px}
+.ewait i{width:9px;height:9px;border-radius:50%;background:var(--atomE);border:1px solid #B98A00}
+.ewait small{color:var(--good);font-weight:700}
+.hole{position:absolute;top:3px;bottom:3px;width:36px;border-radius:10px;border:2px dashed var(--bad);background:color-mix(in srgb,var(--bad) 18%,var(--paper));color:var(--bad);font-weight:800;font-size:11px;padding:0;z-index:2;animation:pop .3s ease}
+.matrixlbl{padding:4px 10px 6px;background:color-mix(in srgb,var(--pyr) 8%,var(--paper))}
+.narr{position:fixed;z-index:36;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(520px,calc(100% - 32px));background:var(--ink);color:var(--floor);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 30px rgba(0,0,0,.3);animation:up .25s ease}
+.narr .label{color:#A9BEC6}
+.narr p{margin:0;font-size:16px;line-height:1.4}
+.narr .btn{background:var(--floor);color:var(--ink);box-shadow:none;align-self:flex-end}
+
+/* Why explainers */
+.qrow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.qrow:empty{display:none}
+.qrow.left{justify-content:flex-start}
+.qchip{border:2px solid var(--nad);background:var(--paper);color:var(--nad);border-radius:999px;padding:5px 11px;font-weight:700;font-size:13px;line-height:1.25;text-align:left}
+.qchip::before{content:"?";display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--nad);color:var(--paper);font-size:11px;margin-right:6px;vertical-align:1px}
+.qdot{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--nad);color:var(--nad);background:var(--paper);font:800 13px var(--body);padding:0;line-height:1;display:inline-grid;place-items:center}
+.lblq{display:inline-flex;align-items:center;gap:6px}
+.qpop{position:fixed;inset:0;z-index:50;background:rgba(21,48,58,.5);display:flex;align-items:center;justify-content:center;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.qcard{background:var(--paper);border-radius:18px;padding:18px;width:100%;max-width:460px;max-height:86vh;overflow:auto;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 50px rgba(0,0,0,.3);border-top:6px solid var(--nad);animation:up .25s ease}
+.qcard h3{font-size:20px}
+.qcard p{margin:0;font-size:15px;line-height:1.5;max-width:60ch}
+.qcard .btn{align-self:flex-end}
+.whyfig{width:100%;max-width:340px;height:auto;align-self:center}
+.whyfig .wf{font:700 10px var(--body);fill:var(--ink)} .whyfig .wf2{font:400 9.5px var(--body);fill:var(--muted)}
+.whylist{display:flex;flex-wrap:wrap;gap:6px}
+
+/* Step-by-step scenes */
+.spotcard.scene{gap:10px}
+.stagewrap{width:100%;max-width:320px;position:relative;overflow:hidden;margin:0 auto}
+.stage{position:absolute;left:0;top:0;width:320px;transform-origin:0 0}
+.sa{position:absolute;left:0;top:0;transition:transform .8s cubic-bezier(.4,0,.2,1),opacity .5s,box-shadow .3s,background .3s}
+.atom{border-radius:50%;z-index:2}
+.at-C{width:18px;height:18px;background:var(--atomC)}
+.at-O{width:18px;height:18px;background:var(--atomO)}
+.at-H{width:11px;height:11px;background:var(--paper);border:1.5px solid var(--atomC)}
+.at-E{width:10px;height:10px;background:var(--atomE);border:1.5px solid #B98A00;z-index:3}
+.sbox{display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:9px;background:var(--c);color:#fff;font:800 13px var(--display);white-space:nowrap;z-index:1}
+.sbox i{width:12px;height:12px;border-radius:50%;border:2px dashed rgba(255,255,255,.85)}
+.sbox.loaded i{border-style:solid;border-color:var(--atomE);background:var(--atomE)}
+.sbox.dim{opacity:.5}
+.sbox.glow{box-shadow:0 0 0 4px var(--atomE)}
+.soutline{position:absolute;border:2.5px dashed var(--c);border-radius:20px;transition:left .8s,top .8s,width .8s,height .8s,opacity .5s}
+.soutline>b{position:absolute;left:10px;top:-10px;background:var(--floor);padding:0 5px;font:800 12px var(--display);color:var(--c);white-space:nowrap}
+.soutline.enz{border-style:dotted;border-color:var(--line)}
+.soutline.enz>b{color:var(--muted)}
+.stag{font:700 11px var(--body);color:var(--muted);white-space:nowrap;text-align:center}
+.stag.big{font:800 13px var(--display);color:var(--ink);white-space:normal;width:104px;line-height:1.2}
+
+/* Reaction spotlight */
+.spot{position:fixed;inset:0;z-index:35;display:flex;align-items:center;justify-content:center;background:rgba(21,48,58,.6);padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.spotcard{background:var(--floor);border-radius:22px;padding:18px 16px;width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.spotrow{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:130px;width:100%}
+.bigmol{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 14px 10px;border-radius:18px;border:3px solid var(--c);background:color-mix(in srgb,var(--c) 18%,var(--paper));font:800 18px var(--display);color:var(--ink);transform-origin:center}
+.bigmol.swap{animation:pop .4s ease}
+.bigmol.glow{box-shadow:0 0 0 5px var(--atomE)}
+.spotrow .op{font-size:28px}
+.spotcap{font-size:16px;line-height:1.4;max-width:38ch;min-height:3em;margin:0}
+.spot .packet{position:absolute;z-index:2}
+.spot.quick{background:rgba(21,48,58,.12);pointer-events:none}
+.spot.quick .spotcard{max-width:260px;padding:10px 12px;gap:0;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.spot.quick .spotrow{min-height:90px}
+.spot.quick .bigmol{padding:8px 10px 6px;font-size:14px;gap:3px;border-width:2px}
+.spot.quick .label,.spot.quick .spotcap{display:none}
+
+/* Flyers and overlays */
+#fx{position:fixed;inset:0;pointer-events:none;z-index:40}
+.fchip{position:fixed;left:0;top:0;height:22px;padding:0 7px;border-radius:11px;background:var(--c);color:var(--ci);font:700 11px var(--body);display:flex;align-items:center;white-space:nowrap;box-shadow:0 0 0 2px var(--paper),0 2px 6px rgba(21,48,58,.25)}
+.delta{position:fixed;left:0;top:0;font:800 15px var(--display);color:var(--ink);background:var(--paper);border:2px solid var(--c);padding:1px 7px;border-radius:8px;white-space:nowrap}
+.overlay{position:fixed;inset:0;background:rgba(21,48,58,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30;padding:0 max(12px,env(safe-area-inset-left,0px)) calc(12px + env(safe-area-inset-bottom,0px))}
+.sheet{background:var(--floor);border-radius:20px;width:100%;max-width:560px;max-height:88vh;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px;animation:up .25s ease}
+@keyframes up{from{transform:translateY(30px);opacity:0}}
+.sheet h2{font-size:24px}
+.sheet p{margin:0}
+.lesson{background:var(--cyto);border-left:4px solid var(--nad);padding:10px 12px;border-radius:0 10px 10px 0}
+.bigstars{font-size:40px;letter-spacing:6px;color:var(--line);text-align:center}
+.bigstars b{color:var(--glu);font-weight:400}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.actions .btn{flex:1 1 140px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="fx"></div>
+<div id="layer"></div>
+
+<script>
+/* ================= Molecules ================= */
+const MOLS = {
+  glucose:{label:'Glucose',short:'Glucose',c:'var(--glu)'},
+  atp:{label:'ATP',short:'ATP',c:'var(--atp)'},
+  adp:{label:'ADP',short:'ADP',c:'var(--adp)',ink:'var(--ink)'},
+  nad:{label:'NAD⁺',short:'NAD⁺',c:'var(--nad)'},
+  nadh:{label:'NADH',short:'NADH',c:'var(--nad)'},
+  pyr:{label:'Pyruvate',short:'Pyruvate',c:'var(--pyr)'},
+  lactate:{label:'Lactate',short:'Lactate',c:'var(--lac)'},
+  acet:{label:'Acetaldehyde',short:'Acetaldehyde',c:'var(--acet)',ink:'var(--ink)'},
+  ethanol:{label:'Ethanol',short:'Ethanol',c:'var(--eth)'},
+  co2:{label:'CO₂',short:'CO₂',c:'var(--co2)',ink:'var(--ink)'},
+  o2:{label:'O₂',short:'O₂',c:'var(--o2)',ink:'var(--ink)'},
+  acoa:{label:'Acetyl-CoA',short:'Acetyl-CoA',c:'var(--acoa)'},
+  fad:{label:'FAD',short:'FAD',c:'var(--fad)'},
+  fadh2:{label:'FADH₂',short:'FADH₂',c:'var(--fad)'},
+  hplus:{label:'H⁺',short:'H⁺',c:'var(--hp)'},
+  h2o:{label:'H₂O',short:'H₂O',c:'var(--h2o)',ink:'var(--ink)'},
+  e2:{label:'electron pair',short:'e⁻ e⁻',c:'var(--atomE)',ink:'var(--ink)'},
+  coa:{label:'CoA',short:'CoA',c:'var(--atomA)'}
+};
+const lbl = (k,n)=>{ const s=(n&&n>1?n+' ':'') + MOLS[k].label; return (k==='e2'&&n>1) ? s+'s' : s; };
+/* Simplified structures: dark = carbon, red = oxygen, white = hydrogen, orange = phosphate, yellow = electrons */
+const PYR = [['C',4,18],['C',12,13],['C',20,18],['O',12,4],['O',28,14],['O',20,27]];
+const GEO = {
+  glucose:{atoms:[['C',8,10],['O',15,5],['C',22,10],['C',22,19],['C',15,24],['C',8,19],['C',1,5]],bonds:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6]]},
+  pyr:{atoms:PYR,bonds:[[0,1],[1,2],[1,3],[2,4],[2,5]]},
+  lactate:{atoms:[...PYR,['H',5,2]],bonds:[[0,1],[1,2],[1,3],[2,4],[2,5],[3,6]]},
+  acet:{atoms:[['C',4,18],['C',12,13],['O',12,4]],bonds:[[0,1],[1,2]]},
+  ethanol:{atoms:[['C',4,18],['C',12,13],['O',12,4],['H',5,2]],bonds:[[0,1],[1,2],[2,3]]},
+  co2:{atoms:[['O',4,14],['C',12,14],['O',20,14]],bonds:[[0,1],[1,2]]},
+  o2:{atoms:[['O',4,14],['O',12,14]],bonds:[[0,1]]},
+  half:{atoms:[['C',4,14],['C',12,14],['C',20,14]],bonds:[[0,1],[1,2]]}
+};
+const RAD = {C:4.2,O:4.2,H:2.8};
+function svgWrap(x0,w,h,inner){ return `<svg class="mol" viewBox="${x0} -2 ${w} 32" width="${(h*w/32).toFixed(1)}" height="${h}" aria-hidden="true">${inner}</svg>`; }
+function molSVG(k,h=28){
+  if(k==='atp'||k==='adp'){
+    const n = k==='atp'?3:2; let s=`<rect class="aA" x="0" y="6" width="14" height="16" rx="4"/><text class="aT" x="7" y="18">A</text>`;
+    for(let i=0;i<n;i++){ const x=20+i*8; s+=`<line class="bond" x1="${x-8+(i?0:2)}" y1="14" x2="${x}" y2="14"/>`; }
+    for(let i=0;i<n;i++) s+=`<circle class="aP" cx="${20+i*8}" cy="14" r="4.6"/>`;
+    return svgWrap(-1, 20+(n-1)*8+7, h, s);
+  }
+  if(k==='nad'||k==='nadh'){
+    let s=`<rect class="aN" x="0" y="6" width="14" height="16" rx="4"/><text class="aT" x="7" y="18">N</text><line class="bond" x1="14" y1="14" x2="18" y2="14"/><circle class="aSlot" cx="23" cy="14" r="5.5"/>`;
+    if(k==='nadh') s+=`<circle class="aH" cx="23" cy="15.5" r="2.8"/><circle class="aE" cx="19.6" cy="8.6" r="2.2"/><circle class="aE" cx="26.4" cy="8.6" r="2.2"/>`;
+    return svgWrap(-1, 31, h, s);
+  }
+  if(k==='fad'||k==='fadh2'){
+    let s=`<rect class="aF" x="0" y="6" width="14" height="16" rx="4"/><text class="aT" x="7" y="18">F</text><line class="bond" x1="14" y1="14" x2="18" y2="14"/><circle class="aSlot" style="stroke:var(--fad)" cx="23" cy="14" r="5.5"/>`;
+    if(k==='fadh2') s+=`<circle class="aH" cx="20.8" cy="16" r="2.4"/><circle class="aH" cx="25.4" cy="16" r="2.4"/><circle class="aE" cx="19.6" cy="8.6" r="2.2"/><circle class="aE" cx="26.4" cy="8.6" r="2.2"/>`;
+    return svgWrap(-1, 31, h, s);
+  }
+  if(k==='acoa') return svgWrap(-1,46,h,`<line class="bond" x1="4" y1="18" x2="12" y2="13"/><line class="bond" x1="12" y1="13" x2="12" y2="4"/><line class="bond" x1="12" y1="13" x2="22" y2="13"/><rect class="aA" x="21" y="6" width="23" height="15" rx="4"/><text class="aT sm" x="32.5" y="16.5">CoA</text><circle class="aC" cx="4" cy="18" r="4.2"/><circle class="aC" cx="12" cy="13" r="4.2"/><circle class="aO" cx="12" cy="4" r="4.2"/>`);
+  if(k==='hplus') return svgWrap(-1,18,h,`<circle class="aHp" cx="8" cy="14" r="7.5"/><text class="aT" x="8" y="17.5">+</text>`);
+  if(k==='h2o') return svgWrap(-2,24,h,`<line class="bond" x1="10" y1="17" x2="3" y2="10"/><line class="bond" x1="10" y1="17" x2="17" y2="10"/><circle class="aO" cx="10" cy="17" r="4.6"/><circle class="aH" cx="3" cy="10" r="2.8"/><circle class="aH" cx="17" cy="10" r="2.8"/>`);
+  if(k==='e2') k='packet';
+  if(k==='coa') return svgWrap(-1,26,h,`<rect class="aA" x="0" y="6" width="23" height="15" rx="4"/><text class="aT sm" x="11.5" y="16.5">CoA</text>`);
+  if(k==='krebs') return svgWrap(-1,32,h,`<circle cx="15" cy="14" r="10.5" fill="none" stroke="var(--acoa)" stroke-width="3" stroke-dasharray="15 2.5"/><path d="M22 3 L28 6 L23 10 z" fill="var(--acoa)"/><text class="aT" style="fill:var(--ink)" x="15" y="17.5">4C</text>`);
+  if(k==='packet') return svgWrap(0,14,h,`<circle class="aH" cx="7" cy="17" r="3.2"/><circle class="aE" cx="3" cy="9" r="2.6"/><circle class="aE" cx="11" cy="9" r="2.6"/>`);
+  const g = GEO[k]; let minx=1e9,maxx=-1e9;
+  g.atoms.forEach(([t,x])=>{ minx=Math.min(minx,x-RAD[t]-1); maxx=Math.max(maxx,x+RAD[t]+1); });
+  let s = g.bonds.map(([a,b])=>`<line class="bond" x1="${g.atoms[a][1]}" y1="${g.atoms[a][2]}" x2="${g.atoms[b][1]}" y2="${g.atoms[b][2]}"/>`).join('');
+  s += g.atoms.map(([t,x,y])=>`<circle class="a${t}" cx="${x}" cy="${y}" r="${RAD[t]}"/>`).join('');
+  return svgWrap(minx, maxx-minx, h, s);
+}
+const tokHTML = k => `${molSVG(k,28)}<span class="tl">${MOLS[k].label}</span>`;
+const atomKey = `<div class="atomkey">
+  <span><svg width="12" height="12" viewBox="0 0 12 12"><circle class="aC" cx="6" cy="6" r="5"/></svg>carbon</span>
+  <span><svg width="12" height="12" viewBox="0 0 12 12"><circle class="aO" cx="6" cy="6" r="5"/></svg>oxygen</span>
+  <span><svg width="12" height="12" viewBox="0 0 12 12"><circle class="aH" cx="6" cy="6" r="4"/></svg>hydrogen</span>
+  <span><svg width="12" height="12" viewBox="0 0 12 12"><circle class="aP" cx="6" cy="6" r="5"/></svg>phosphate</span>
+  <span><svg width="12" height="12" viewBox="0 0 12 12"><circle class="aE" cx="6" cy="6" r="4"/></svg>electrons</span></div>`;
+
+/* ================= Reactions ================= */
+const RXN = {
+  glyco:{name:'Glycolysis (the machine does this)', in:[['glucose',1],['atp',2],['nad',2]], out:[['pyr',2],['atp',4],['nadh',2]]},
+  lactic:{name:'Lactic acid fermentation', in:[['nadh',1],['pyr',1]], out:[['nad',1],['lactate',1]],
+    cap:'NADH hands its electrons to pyruvate. Pyruvate becomes lactate, and NAD⁺ is empty again.'},
+  decarb:{name:'Alcohol fermentation, step 1', in:[['pyr',1]], out:[['acet',1],['co2',1]],
+    cap:'Pyruvate lets go of one carbon as CO₂. What is left is acetaldehyde.'},
+  adh:{name:'Alcohol fermentation, step 2', in:[['nadh',1],['acet',1]], out:[['nad',1],['ethanol',1]],
+    cap:'NADH hands its electrons to acetaldehyde. It becomes ethanol, and NAD⁺ is empty again.'},
+  pox:{name:'Pyruvate oxidation', in:[['pyr',1],['nad',1],['coa',1]], out:[['acoa',1],['co2',1],['nadh',1]]},
+  krebsT:{name:'Krebs cycle (one turn)', in:[['acoa',1],['nad',3],['fad',1]], out:[['co2',2],['nadh',3],['fadh2',1],['atp',1],['coa',1]]},
+  etcN:{name:'Electron transport: NADH', in:[['nadh',1]], out:[['nad',1],['hplus',10]]},
+  etcF:{name:'Electron transport: FADH₂', in:[['fadh2',1]], out:[['fad',1],['hplus',6]]},
+  o2x:{name:'End of the chain', in:[['e2',2],['o2',1]], out:[['h2o',2]]},
+  syn:{name:'ATP synthase', in:[['hplus',4],['adp',1]], out:[['atp',1]]}
+};
+function eqHTML(rx){
+  const side = arr => arr.map(([k,n])=>`<span class="term">${molSVG(k,18)}${lbl(k,n)}</span>`).join('<span class="op">+</span>');
+  return `<div class="eq">${side(rx.in)}<span class="op">→</span>${side(rx.out)}</div>`;
+}
+const WRONG = {
+  adp:'ADP is ATP with its energy already spent (count the phosphates). Glycolysis needs charged ATP to get started.',
+  nadh:'That NADH is already loaded with electrons (the yellow dots). Glycolysis needs empty carriers: NAD⁺.',
+  o2:'Glycolysis does not use oxygen. It runs with or without it.',
+  pyr:'Pyruvate is what glycolysis makes, not what it uses.',
+  lactate:'Lactate comes from fermentation, not glycolysis.',
+  co2:'CO₂ is not part of glycolysis.'
+};
+const PAIR_WRONG = {
+  o2:'Oxygen is the best electron taker there is, but only mitochondria can use it, not the cytoplasm. And in this oxygen-starved cell, there isn’t enough of it reaching the mitochondria anyway. (Mitochondria arrive in tier 2.)',
+  adp:'ADP stores energy in phosphate bonds, not electrons. It can’t take NADH’s electrons.',
+  yeastPyr:'Yeast can’t hand electrons straight to pyruvate. Tap the pyruvate on its own first to release its CO₂.',
+  lactate:'Lactate already took a pair of electrons. It can’t take more.',
+  ethanol:'Ethanol already took a pair of electrons. It can’t take more.',
+  co2:'CO₂ can’t take NADH’s electrons here.'
+};
+
+/* ================= Levels ================= */
+const LEVELS = [
+  {name:'First shift', tag:'Be the enzyme', mode:'assemble', here:{you:'glyco', note:'You are doing glycolysis by hand. It happens in the cytoplasm, the fluid that fills the cell, and needs no oxygen.'},
+   brief:'No machines yet. You are the enzyme. Molecules stream past: tap the ones glycolysis needs to build each run. Wrong picks cost 2 seconds. Every 3 clean runs in a row earns 3 seconds back. The clock stops while each finished run is shown.',
+   duration:50, goal:{type:'runs',target:4}, stars:[6,8],
+   hint:'Each run needs exactly 1 glucose, 2 ATP and 2 NAD⁺. Watch out for look-alikes: ADP has one fewer phosphate than ATP, and NADH is already carrying electrons.',
+   lesson:'Glycolysis takes 1 glucose (6 carbons) and splits it into 2 pyruvate (3 carbons each). It spends 2 ATP and makes 4, so the cell gains 2. Along the way 2 empty NAD⁺ carriers pick up electrons and become NADH. Keep an eye on that NADH. It matters in the next level.'},
+  {name:'The stall', tag:'Something runs out', mode:'hands', auto:true, machines:1, cycle:3.0, here:{you:'ferm', helper:'glyco', helperTag:'MACHINE', ferm:'lactic acid · 0 ATP', note:'This is a muscle cell in a hard sprint. It is using ATP faster than blood can bring it oxygen, so its mitochondria can’t keep up and it has to live on glycolysis. A machine runs glycolysis; you work just after it, on what happens to pyruvate and NADH without oxygen.'},
+   known:['glyco'], discover:['lactic'],
+   brief:'This is a muscle cell in a hard sprint, using ATP faster than blood can bring it oxygen. Without enough oxygen its mitochondria can’t help, so glycolysis is its only source of ATP. You know the recipe, so now a machine runs glycolysis for you. Every run drops its pyruvate and loaded NADH into the cytoplasm below. Glycolysis can’t reuse a carrier while it still holds electrons. Tap an NADH, then tap whatever you think can take its electrons.',
+   start:{glucose:12,atp:2,nad:4}, goal:{type:'atp',target:14}, stars:[40,60], decoys:['o2','adp'],
+   hint:'Glycolysis is waiting for empty NAD⁺. Tap a loaded NADH, then tap a pyruvate to hand over the electrons.',
+   lesson:'You were the fermentation step. Glycolysis kept stalling because it ran out of empty NAD⁺, not ATP or glucose. Fermentation makes no ATP. It exists to pass NADH’s electrons to pyruvate (making lactate) so NAD⁺ is free again. Oxygen would be a better electron taker, but only mitochondria can use it, and in a sprinting muscle they can’t get enough. This is what your leg muscles do in a sprint: when oxygen can’t arrive fast enough, they turn pyruvate into lactate to keep glycolysis going.'},
+  {name:'Yeast shift', tag:'A different kind of cell', mode:'hands', auto:true, machines:1, cycle:3.0, yeast:true, here:{you:'ferm', helper:'glyco', helperTag:'MACHINE', ferm:'alcohol (yeast) · 0 ATP', note:'Same place as last level, different organism: a yeast cell in rising bread dough, where the oxygen soon runs out. Yeast take the alcohol fermentation path instead of the lactic acid one.'},
+   known:['glyco','lactic'], blocked:'lactic', discover:['decarb','adh'],
+   brief:'You are running a yeast cell in rising bread dough now. The yeast have used up the oxygen in the dough, so like the sprinting muscle they must ferment, but yeast do fermentation differently. Try what worked last level and see what the cell lets you do.',
+   start:{glucose:12,atp:2,nad:4}, goal:{type:'atp',target:12}, stars:[45,65], decoys:['o2','adp'],
+   hint:'Yeast ferment in two steps. Tap a pyruvate on its own to release CO₂, then hand NADH’s electrons to what’s left.',
+   lesson:'Yeast ferment in two steps: pyruvate gives off CO₂ (the bubbles that make bread rise), then the leftover acetaldehyde takes NADH’s electrons and becomes ethanol. Different products, same purpose: recycle NAD⁺.'},
+  {name:'Muscle on the move', tag:'Spend wisely', mode:'hands', auto:false, machines:2, cycle:2.6, here:{you:'ferm', helper:'glyco', helperTag:'YOU START IT', ferm:'lactic acid · 0 ATP', note:'The same sprinting, oxygen-starved muscle as level 2, so it still runs on glycolysis plus lactic acid fermentation. Now you also decide when glycolysis starts, because every run costs ATP up front.'},
+   known:['glyco','lactic'], discover:[],
+   brief:'This muscle is sprinting, using 1 ATP every 2 seconds, faster than oxygen can reach it, so it has to run on glycolysis and fermentation. You start each glycolysis run yourself, and every start invests 2 ATP before any comes back. You have two machines. Keep the muscle powered for 40 seconds, and keep unloading NADH so the machines can restart.',
+   start:{glucose:40,atp:8,nad:6}, goal:{type:'survive',duration:40}, drain:2.0, stars:[6,14], decoys:['o2','adp'],
+   hint:'Each run pays back 4 ATP for the 2 you put in. Start a machine whenever you have the ATP and NAD⁺ to spare, and keep unloading NADH.',
+   lesson:'Every glycolysis run is an investment: 2 ATP in before 4 come out. Spend too early and the muscle runs short while you wait for the payoff. Spend too late and you fall behind. Real cells regulate glycolysis for exactly this reason.'},
+  {name:'Fever', tag:'Heat changes everything', mode:'hands', auto:true, machines:1, cycle:2.6, here:{you:'ferm', helper:'glyco', helperTag:'MACHINE', ferm:'lactic acid · 0 ATP', note:'The same oxygen-starved muscle cell, still fermenting, now running a fever. What changes is temperature, which affects every enzyme here, including the ones that run glycolysis.'},
+   known:['glyco','lactic'], discover:[],
+   brief:'The same oxygen-starved muscle cell is heating up. Enzymes work fastest near 37 °C, slow down as it gets hotter, and lose their shape above 46 °C. Cooling down costs 1 ATP each time (a game rule, not biology). Keep unloading NADH too.',
+   start:{glucose:30,atp:4,nad:6}, goal:{type:'atp',target:20,limit:80}, temp:{start:37,rise:0.4}, stars:[50,65], decoys:['o2','adp'],
+   hint:'Heat slows the machine, and past 46 °C it breaks. Cool down before then, and keep unloading NADH.',
+   lesson:'Enzymes speed up with a little heat, but only to a point. Past their best temperature they denature, and that damage does not reverse when things cool off. You had to rebuild, not just cool down.'},
+  {name:'Breaking it down', tag:'Into the mitochondrion', tier:2, mode:'mito', stage:'krebs',
+   here:{you:['pox','krebs'], tags:['YOU ARE HERE','AND HERE'], tier2:true, note:'When oxygen is around, pyruvate from glycolysis moves into the mitochondrion instead of being fermented. You do the first two steps there by hand.'},
+   known:[], discover:['pox','krebsT'],
+   brief:'Pyruvate from glycolysis is arriving in the mitochondrion\u2019s matrix. Tap a pyruvate to strip off a carbon and its electrons, then tap the acetyl-CoA it becomes to feed it into the Krebs cycle. Keep going until every carbon from 2 glucose (12 in all) has left as CO₂.',
+   start:{nad:16,fad:4}, pyruvate:4, inflowEvery:5, goal:{type:'co2',target:12}, stars:[75,100], decoys:['glucose','o2','lactate'],
+   hint:'Tap a pyruvate first. Then tap the acetyl-CoA it turns into to feed the Krebs cycle.',
+   lesson:'Every carbon from the 2 glucose left as CO₂, the CO₂ you breathe out. But the ATP tank shows only 4. Most of glucose\u2019s energy is now riding in 16 loaded NADH and 4 FADH₂, and with every carrier loaded these steps can\u2019t run again until something unloads them. That is the next level.'},
+  {name:'Cash in the electrons', tag:'The electron transport chain', tier:2, mode:'mito', stage:'etc', krebsAuto:true, krebsCycle:3.5,
+   here:{you:'etc', helper:'krebs', helperTag:'MACHINE', tier2:true, note:'The Krebs cycle now runs by itself. You work in the inner membrane, where the electron transport chain turns loaded carriers into ATP.'},
+   known:['pox','krebsT'], discover:['etcN','etcF','o2x','syn'],
+   brief:'Loaded carriers are piling up in the matrix. Tap an NADH or FADH₂ to send its electrons down the chain in the inner membrane. The chain uses them to pump H⁺ out of the matrix, and ATP synthase turns that crowd of H⁺ into ATP. Electrons that reach the end need oxygen: tap an O₂ when electrons are waiting at complex IV.',
+   start:{nad:3,fad:1,nadhTok:4,fadh2Tok:1}, o2Every:3.5, goal:{type:'atp',target:30,limit:150}, stars:[70,100], decoys:['glucose','co2'],
+   hint:'If carriers won\u2019t unload, look at complex IV: electrons are stuck there. Tap an O₂ to take them.',
+   lesson:'Each NADH pumped 10 H⁺ and each FADH₂ pumped 6. Every 4 H⁺ flowing back through ATP synthase made 1 ATP, so an NADH is worth about 2.5 ATP and an FADH₂ about 1.5. Oxygen works at the very end, taking the spent electrons so the chain keeps moving. That is why you need to breathe.'},
+  {name:'Leaky membrane', tag:'When H⁺ slips through', tier:2, mode:'mito', stage:'etc', krebsAuto:true, krebsCycle:3.5,
+   here:{you:'etc', helper:'krebs', helperTag:'MACHINE', tier2:true, note:'Same place as the last level. A chemical called an uncoupler is making holes in the inner membrane.'},
+   known:['pox','krebsT','etcN','etcF','o2x','syn'], discover:[], summary:['etcN','syn'],
+   brief:'Same job as last level, but an uncoupler is punching leaks in the inner membrane. H⁺ that slips back through a leak skips ATP synthase. Keep the chain running and plug leaks as they appear.',
+   start:{nad:3,fad:1,nadhTok:4,fadh2Tok:1}, o2Every:3.5, goal:{type:'atp',target:30,limit:170}, stars:[85,120], decoys:['glucose','co2'],
+   holes:{first:8,every:9,max:3,rate:0.5},
+   hint:'Plug the leaks in the membrane so the H⁺ you pump has to go back through ATP synthase.',
+   lesson:'The electrons and oxygen kept working, but H⁺ that leaked back made no ATP. Its energy became heat instead. The H⁺ gradient is the link between the chain and ATP synthase, and uncouplers break that link. Brown fat in newborns and hibernating animals has a built-in leak on purpose, to make heat.'}
+];
+
+/* ================= Map ================= */
+function mapSVG(here){
+  here = here || {};
+  const you = [].concat(here.you||[]), t1 = here.tier||[], t2 = here.tier2box||[];
+  const tagFor = id => you.includes(id) ? ((here.tags||[])[you.indexOf(id)]||'YOU ARE HERE') : id===here.helper ? here.helperTag : t1.includes(id) ? 'TIER 1' : t2.includes(id) ? 'TIER 2' : null;
+  const cls = id => you.includes(id) || t1.includes(id) || t2.includes(id) ? 'here' : id===here.helper ? 'helper' : '';
+  const lockM = !here.tier2;
+  const box = (id,x,y,w,h,lines,locked)=>{
+    const t = lines.map((s,i)=>`<text class="${i===0||(lines.length===3&&i===1)?'m1':'m2'}" x="${x+w/2}" y="${y+h/2-(lines.length-1)*6+i*12+4}">${s}</text>`).join('');
+    const tg = tagFor(id), tw = tg ? tg.length*5.6+14 : 0;
+    const tag = tg ? `<g class="youhere ${cls(id)}"><rect x="${x+w/2-tw/2}" y="${y+h+3}" width="${tw}" height="13" rx="6.5"/><text x="${x+w/2}" y="${y+h+12.5}">${tg}</text></g>` : '';
+    return `<g class="mbox ${cls(id)} ${locked?'locked':''}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9"/>${t}</g>${tag}`;
+  };
+  return `<svg class="map" viewBox="0 0 364 330" role="img" aria-label="Map of photosynthesis and cellular respiration, with the part you are playing highlighted">
+  <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="ahead" d="M0,0 L8,4 L0,8 z"/></marker></defs>
+  <rect class="reg locked" x="26" y="6" width="308" height="78" rx="14"/>
+  <text class="rl" x="38" y="21">Chloroplast · photosynthesis</text><text class="tier" x="322" y="21">Tier 3</text>
+  ${box('calvin',40,30,110,42,['Calvin cycle','builds glucose'],true)}
+  ${box('light',210,30,110,42,['Light reactions','split water, release O₂'],true)}
+  <path class="arr" d="M208,51 L152,51" marker-end="url(#ah)"/><text class="al" x="180" y="46" text-anchor="middle">ATP, NADPH</text>
+  <path class="arr" d="M130,73 L130,122" marker-end="url(#ah)"/><text class="al" x="136" y="96">glucose</text>
+  <rect class="reg" x="26" y="104" width="308" height="94" rx="14"/>
+  <text class="rl" x="38" y="119">Cytoplasm</text><text class="tier" x="322" y="119">Tier 1</text>
+  ${box('glyco',40,126,120,44,['Glycolysis','+2 ATP'],false)}
+  ${box('ferm',210,126,110,44,['Fermentation', here.ferm||'0 ATP · recycles NAD⁺'],false)}
+  <path class="arr" d="M161,148 L208,148" marker-end="url(#ah)"/><text class="al" x="185" y="142" text-anchor="middle">pyruvate</text><text class="al" x="185" y="161" text-anchor="middle">no O₂</text>
+  <path class="arr" d="M78,171 L78,222" marker-end="url(#ah)"/><text class="al" x="84" y="208">pyruvate · with O₂</text>
+  <rect class="reg ${lockM?'locked':''}" x="26" y="214" width="308" height="110" rx="26"/>
+  <text class="rl" x="40" y="314">Mitochondrion</text><text class="tier" x="320" y="314">Tier 2</text>
+  ${box('pox',36,224,84,56,['Pyruvate','oxidation','releases CO₂'],lockM)}
+  ${box('krebs',132,224,84,56,['Krebs','cycle','+2 ATP'],lockM)}
+  ${box('etc',228,224,84,56,['Electron','transport chain','~26–28 ATP'],lockM)}
+  <path class="arr" d="M121,252 L130,252" marker-end="url(#ah)"/><path class="arr" d="M217,252 L226,252" marker-end="url(#ah)"/>
+  <path class="arr" d="M321,51 L348,51 L348,252 L314,252" marker-end="url(#ah)"/><text class="al" x="356" y="150" text-anchor="middle" transform="rotate(90 356 150)">O₂</text>
+  <path class="arr" d="M26,268 L13,268 L13,51 L38,51" marker-end="url(#ah)"/><text class="al" x="9" y="160" text-anchor="middle" transform="rotate(-90 9 160)">CO₂ + H₂O</text>
+  </svg>${here.note?`<p class="mapnote">${here.note}</p>`:''}`;
+}
+
+/* ================= Shared helpers ================= */
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem('gw-progress')||'{}') || {}; } catch(e){ progress = {}; }
+function saveProgress(){ try { localStorage.setItem('gw-progress', JSON.stringify(progress)); } catch(e){} }
+const app = document.getElementById('app'), layer = document.getElementById('layer'), fx = document.getElementById('fx');
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+let G = null, lastT = 0;
+const cache = {};
+const $ = id => document.getElementById(id);
+const wait = ms => new Promise(r=>setTimeout(r, reduceMotion ? Math.min(ms,150) : ms));
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+function starHTML(n, cls){ let s=''; for(let i=0;i<3;i++) s += i<n ? '<b>★</b>' : '★'; return `<span class="${cls}">${s}</span>`; }
+function setText(id, txt){ if(cache[id]===txt) return; cache[id]=txt; const el=$(id); if(el) el.textContent=txt; }
+function fmt(t){ t=Math.max(0,Math.ceil(t)); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); }
+function bumpEl(el){ if(!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+function center(el){ const r=el.getBoundingClientRect(); return [r.left+r.width/2, r.top+r.height/2]; }
+function flash(t, kind){ const m=$('msg'); if(!m) return; m.textContent=t; m.className='msg'+(kind?' '+kind:''); clearTimeout(flash.h); flash.h=setTimeout(()=>{ m.textContent=''; m.className='msg'; }, kind==='bad'?4500:2800); }
+
+/* Labeled chips that fly between places, so the player can count them and see where they land */
+function flyChip(k, from, to, delay=0, dur=800){
+  if(reduceMotion) return Promise.resolve();
+  const d=document.createElement('span'); d.className='fchip';
+  d.style.setProperty('--c',MOLS[k].c); d.style.setProperty('--ci',MOLS[k].ink||'#fff');
+  d.textContent=MOLS[k].short; d.style.left=from[0]+'px'; d.style.top=from[1]+'px'; d.style.opacity='0';
+  fx.appendChild(d);
+  const dx=to[0]-from[0], dy=to[1]-from[1], lift=Math.min(60,Math.abs(dx)*.2+20);
+  const a=d.animate([
+    {transform:'translate(-50%,-50%) scale(.6)',opacity:0},
+    {transform:'translate(-50%,-50%) scale(1)',opacity:1,offset:.12},
+    {transform:`translate(calc(-50% + ${dx*.5}px),calc(-50% + ${dy*.5-lift}px)) scale(1)`,opacity:1,offset:.55},
+    {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.85)`,opacity:1}
+  ],{duration:dur,delay,easing:'ease-in-out',fill:'forwards'});
+  return a.finished.then(()=>d.remove(),()=>d.remove());
+}
+function showDelta(el, text, k){
+  if(!el) return;
+  const r=el.getBoundingClientRect(), d=document.createElement('span');
+  d.className='delta'; d.textContent=text; d.style.setProperty('--c',MOLS[k].c);
+  d.style.left=(r.left+r.width/2)+'px'; d.style.top=(r.top+4)+'px';
+  fx.appendChild(d);
+  const a=d.animate([{transform:'translate(-50%,-30%)',opacity:0},{transform:'translate(-50%,-90%)',opacity:1,offset:.15},{transform:'translate(-50%,-90%)',opacity:1,offset:.75},{transform:'translate(-50%,-140%)',opacity:0}],{duration:reduceMotion?900:1500,easing:'ease-out'});
+  a.finished.then(()=>d.remove(),()=>d.remove());
+}
+function flyChips(k, n, from, toEl, onLand, sign='+'){
+  if(!toEl){ onLand&&onLand(); return Promise.resolve(); }
+  const to=center(toEl), ps=[];
+  for(let i=0;i<n;i++) ps.push(flyChip(k,[from[0]+(i-(n-1)/2)*14, from[1]],[to[0]+(i-(n-1)/2)*8,to[1]], i*140));
+  return Promise.all(ps).then(()=>{ bumpEl(toEl); showDelta(toEl, `${sign}${n} ${MOLS[k].label}`, k); onLand&&onLand(); });
+}
+
+/* ================= Home ================= */
+function showHome(){
+  G = null; layer.innerHTML = ''; fx.innerHTML=''; for(const k in cache) delete cache[k];
+  document.querySelectorAll('.narr,.spot').forEach(e=>e.remove());
+  const unlockAll = location.hash==='#unlock-all';
+  const card = (L,i)=>{
+    const unlocked = unlockAll || i===0 || progress[i-1];
+    return `<button class="lvcard" data-lv="${i}" ${unlocked?'':'disabled'}>
+      <span class="lvnum">${i+1}</span>
+      <span><h3>${L.name}</h3><p>${unlocked?L.tag:'Finish level '+i+' to unlock'}</p></span>
+      ${starHTML(progress[i]||0,'stars')}</button>`;
+  };
+  const tierOf = L => L.tier||1;
+  const block = t => LEVELS.map((L,i)=>tierOf(L)===t?card(L,i):'').join('');
+  const done = t => LEVELS.every((L,i)=>tierOf(L)!==t || progress[i]);
+  app.innerHTML = `
+    <div class="hero"><div class="label">AP Bio · Cellular energy</div>
+      <h1>Glycolysis <span>Works</span></h1>
+      <p>Run a cell\u2019s energy supply by hand. Grab the right molecules, keep the electron carriers moving, and figure out where the energy in glucose really goes.</p></div>
+    <div class="tierhead"><h3>Tier 1 · Cytoplasm</h3><span class="label">Glycolysis and fermentation</span></div>
+    <div class="levels">${block(1)}</div>
+    <div class="tierhead"><h3>Tier 2 · Mitochondrion</h3><span class="label">Krebs cycle and electron transport</span></div>
+    <div class="levels">${block(2)}</div>
+    ${done(2)?'<div class="lesson"><strong>Tier 2 complete.</strong> You have followed glucose all the way to CO₂, water and about 30 ATP. Next in the full game: chloroplasts, where that glucose gets built in the first place.</div>':''}
+    <div class="panel"><h3>Why it works</h3><p>Questions the game raises, with the answers. They also pop up as you play, wherever the game raises them.</p><div class="whylist">${qChips(Object.keys(WHY))}</div></div>
+    <div class="panel"><h3>Where this fits</h3>
+      <p>Plants and other producers build glucose in chloroplasts. Almost every cell then breaks glucose down for energy, starting with glycolysis in the cytoplasm and, when oxygen is available, finishing in the mitochondrion.</p>
+      ${mapSVG({tier:['glyco','ferm'], tier2box:['pox','krebs','etc'], tier2:true})}${atomKey}</div>`;
+  app.querySelectorAll('.lvcard').forEach(b=>b.onclick=()=>startLevel(+b.dataset.lv));
+}
+
+function goalText(L){
+  if(L.goal.type==='runs') return `Complete ${L.goal.target} glycolysis runs in ${L.duration} seconds.`;
+  if(L.goal.type==='survive') return `Keep the muscle powered for ${L.goal.duration} seconds.`;
+  if(L.goal.type==='co2') return `Break the glucose down completely: get all ${L.goal.target} carbons out as CO₂.`;
+  return `Fill the ATP tank to ${L.goal.target}${L.goal.limit?` within ${L.goal.limit} seconds`:''}.`;
+}
+function briefing(i){
+  const L = LEVELS[i];
+  modal(`<div class="label">Level ${i+1}</div><h2>${L.name}</h2><p>${L.brief}</p>
+    <div class="lesson"><strong>Goal:</strong> ${goalText(L)}</div>
+    ${mapSVG(L.here)}
+    <div class="actions"><button class="btn ghost" id="lvls">All levels</button><button class="btn" id="go">Start shift</button></div>`, ()=>{ $('go').onclick=()=>{closeModal(); G.running=true;}; $('lvls').onclick=()=>showHome(); });
+}
+function showMap(){
+  if(!G || G.over) return;
+  const was = G.running; G.running=false;
+  modal(`<div class="label">Paused</div><h2>Where you are</h2>${mapSVG(G.L.here)}${atomKey}
+    <div class="actions"><button class="btn ghost" id="lvls">All levels</button><button class="btn" id="resume">Resume</button></div>`, ()=>{ $('lvls').onclick=()=>showHome(); $('resume').onclick=()=>{ closeModal(); if(G && !G.over && was) G.running=true; }; });
+}
+function topBar(L){
+  return `<div class="top"><button class="btn ghost" id="back" aria-label="Back to all levels">← Levels</button><h2>${L.name}</h2><button class="btn ghost" id="mapb">Map</button><button class="btn ghost" id="restart" aria-label="Restart level">↻</button></div>
+    <div class="goalbox"><div class="goalrow"><strong id="goaltxt"></strong><span class="mono" id="clock"></span></div><div class="bar"><i id="goalbar"></i></div></div>`;
+}
+function wireTop(){ $('back').onclick=()=>showHome(); $('restart').onclick=()=>startLevel(G.i); $('mapb').onclick=showMap; }
+function tankHTML(id,k,text){ return `<div class="tank" id="${id}"><span class="tl">${molSVG(k,16)}${text||MOLS[k].label}</span><span class="v">0</span></div>`; }
+function startLevel(i){
+  for(const k in cache) delete cache[k]; layer.innerHTML=''; fx.innerHTML=''; document.querySelectorAll('.narr,.spot').forEach(e=>e.remove());
+  const m = LEVELS[i].mode;
+  return m==='assemble' ? startAssemble(i) : m==='mito' ? startMito(i) : startHands(i);
+}
+
+/* ================= Level 1: be the enzyme ================= */
+const NEED = {glucose:1,atp:2,nad:2};
+function startAssemble(i){
+  const L = LEVELS[i];
+  G = { i, L, mode:'assemble', spot:0, time:0, penalty:0, running:false, over:false, hold:false, runs:0, streak:0,
+        have:{glucose:0,atp:0,nad:0}, made:{atp:0,spent:0,pyr:0,nadh:0}, bubbles:[], spawnT:0 };
+  app.innerHTML = topBar(L) + `
+    <div class="tanks">${tankHTML('t-made','atp','ATP made')}${tankHTML('t-spent','adp','ATP spent')}${tankHTML('t-pyr','pyr')}${tankHTML('t-nadh','nadh')}</div>
+    <div class="order" id="order"><div class="orderhead"><span class="label">Glycolysis run · what goes in</span><span class="streak" id="streak"></span></div><div class="need" id="need"></div><div class="tray" id="otray"></div></div>
+    <div class="stream" id="stream" aria-label="Molecule stream"></div>
+    <div class="msg" id="msg"></div>`;
+  wireTop(); renderNeed(); briefing(i);
+}
+function renderNeed(){
+  const el = $('need'); if(!el) return;
+  el.innerHTML = Object.entries(NEED).map(([k,n])=>{
+    let d=''; for(let j=0;j<n;j++) d+=`<span class="${j<G.have[k]?'full':''}" style="--c:${MOLS[k].c}"></span>`;
+    const why = {glucose:'invest', atp:'atp', nad:'glyconad'}[k];
+    return `<div class="needgrp" id="need-${k}"><span class="lblq"><span class="term">${molSVG(k,20)}${MOLS[k].label}</span>${qDot(why)}</span><span class="ndots">${d}</span></div>`;
+  }).join('');
+}
+function spawnBubble(){
+  const box = $('stream'); if(!box) return;
+  const missingKeys = Object.keys(NEED).filter(k=>G.have[k]<NEED[k]);
+  const decoys = ['adp','nadh','o2','pyr','lactate','co2','glucose','atp','nad'];
+  const k = (missingKeys.length && Math.random()<0.55) ? missingKeys[Math.floor(Math.random()*missingKeys.length)] : decoys[Math.floor(Math.random()*decoys.length)];
+  const el = document.createElement('button');
+  el.className='tok'; el.style.setProperty('--c',MOLS[k].c); el.innerHTML=tokHTML(k);
+  el.style.top = (8 + Math.floor(Math.random()*3)*31)+'%';
+  const b = {k, x:box.clientWidth+10, el};
+  el.style.transform = `translateX(${b.x}px)`;
+  el.onclick = ()=>pickBubble(b);
+  box.appendChild(el); G.bubbles.push(b);
+}
+function removeBubble(b){ b.el.remove(); G.bubbles = G.bubbles.filter(x=>x!==b); }
+function pickBubble(b){
+  if(!G || !G.running || G.over || G.hold) return;
+  const k = b.k;
+  if(NEED[k] && G.have[k]<NEED[k]){
+    G.have[k]++;
+    flyChip(k, center(b.el), center($('need-'+k)), 0, 500);
+    removeBubble(b); renderNeed();
+    if(Object.keys(NEED).every(x=>G.have[x]>=NEED[x])) completeRun();
+  } else {
+    G.penalty += 2; G.streak = 0;
+    flash('−2 s · '+(NEED[k] ? `This run already has enough ${MOLS[k].label}.` : WRONG[k]), 'bad');
+    b.el.classList.add('wrong'); b.el.onclick=null;
+    setTimeout(()=>removeBubble(b), 400);
+    const o=$('order'); o.classList.remove('shake'); void o.offsetWidth; o.classList.add('shake');
+  }
+}
+async function completeRun(){
+  const g = G; g.hold = true; g.runs++; g.streak++;
+  await wait(550); if(G!==g) return;
+  const tray = $('otray');
+  tray.innerHTML = `<span class="label" style="width:100%;text-align:center">Glucose split in two! What comes out:</span>`+
+    [['pyr',2],['atp',4],['nadh',2]].map(([k,n])=>`<span class="grp" data-k="${k}" style="--c:${MOLS[k].c}">${molSVG(k,20)}${lbl(k,n)}</span>`).join('');
+  await wait(1300); if(G!==g) return;
+  const grp = k => tray.querySelector(`[data-k="${k}"]`);
+  const ps = [
+    flyChips('adp',2, center($('need-atp')), $('t-spent'), ()=>{ g.made.spent+=2; }),
+    flyChips('pyr',2, center(grp('pyr')), $('t-pyr'), ()=>{ g.made.pyr+=2; }),
+    flyChips('atp',4, center(grp('atp')), $('t-made'), ()=>{ g.made.atp+=4; }),
+    flyChips('nadh',2, center(grp('nadh')), $('t-nadh'), ()=>{ g.made.nadh+=2; })
+  ];
+  await wait(150); if(G!==g) return;
+  tray.innerHTML=''; g.have = {glucose:0,atp:0,nad:0}; renderNeed();
+  await Promise.all(ps); if(G!==g) return;
+  if(g.streak%3===0){ g.penalty -= 3; flash(`Run ${g.runs} done. ${g.streak} clean in a row: +3 s`,'good'); }
+  else flash(`Run ${g.runs} done. Spent 2 ATP, made 4: the cell gains 2.`,'good');
+  g.hold = false;
+}
+function tickAssemble(dt){
+  if(G.spot>0) return;
+  if(G.hold) return;
+  G.time += dt;
+  if(G.L.duration - G.time + G.penalty <= 0) return endLevel(G.runs>=G.L.goal.target, 'Not enough runs this shift.');
+  const speed = 58 + G.runs*7;
+  G.spawnT -= dt;
+  if(G.spawnT<=0){ spawnBubble(); G.spawnT = Math.max(0.55, 0.95 - G.runs*0.04); }
+  for(const b of [...G.bubbles]){
+    b.x -= speed*dt; b.el.style.transform = `translateX(${b.x}px)`;
+    if(b.x < -160) removeBubble(b);
+  }
+}
+function renderAssemble(){
+  const L = G.L;
+  setText('goaltxt', `Runs ${G.runs} / ${L.goal.target}`);
+  setText('clock', G.hold ? 'clock paused' : fmt(L.duration - G.time + G.penalty)+' left');
+  $('goalbar').style.width = Math.min(100,G.runs/L.goal.target*100)+'%';
+  [['t-made',G.made.atp],['t-spent',G.made.spent],['t-pyr',G.made.pyr],['t-nadh',G.made.nadh]].forEach(([id,v])=>{ const e=document.querySelector('#'+id+' .v'); if(e && e.textContent!==String(v)) e.textContent=v; });
+  setText('streak', G.streak>=2 ? `Streak ${G.streak}` : '');
+}
+
+/* ================= Levels 2–5: hands-on cytoplasm ================= */
+function startHands(i){
+  const L = LEVELS[i];
+  G = { i, L, mode:'hands', running:false, over:false, time:0, anims:0,
+        pools:{glucose:0,atp:0,nad:0,lactate:0,ethanol:0,co2:0, ...L.start},
+        car:{inUse:0, loaded:0},
+        machines: Array.from({length:L.machines},()=>({state:'idle',t:0,held:false})),
+        tokens:[], sel:null, lock:0, drainT:0, temp:L.temp?L.temp.start:37,
+        stallT:0, hintOn:false, decoyT:3, found:new Set(L.known||[]), fumbles:0, spot:0, spotN:{} };
+  const product = L.yeast ? tankHTML('pool-ethanol','ethanol')+tankHTML('pool-co2','co2') : tankHTML('pool-lactate','lactate');
+  let extras = '';
+  if(L.drain) extras += `<div class="chip" id="muscle"><span class="label">Muscle</span><span><strong class="mono">−1 ATP every ${L.drain} s</strong><br><span class="sub" id="musclesub">ATP → ADP + energy to contract</span></span></div>`;
+  if(L.temp) extras += `<div class="chip"><span class="label">Temp</span>${qDot('heat')}<strong class="mono" id="tempv"></strong><div class="therm"><i id="tempmark"></i></div><button class="btn cool" id="cool">Cool −1 ATP</button></div>`;
+  app.innerHTML = topBar(L) + `
+    <div class="tanks">${tankHTML('pool-glucose','glucose')}${tankHTML('pool-atp','atp')}${product}</div>
+    <div class="carrier" id="carrier"><div class="row"><span class="lblq"><span class="label">Electron carriers (NAD⁺)</span>${qDot('nad')}</span><span class="mono" id="carriertxt"></span></div><div class="dots" id="dots"></div>
+      <div class="legend">○ empty, ready for glycolysis · ◌ busy or on the way · ● loaded NADH out in the cytoplasm</div></div>
+    ${extras?`<div class="extras">${extras}</div>`:''}
+    <div class="machines" id="machines"></div>
+    <div class="fieldhead"><span class="label">Cytoplasm</span><span class="label" id="fieldtip"></span></div>
+    <div class="field" id="field" aria-label="Cytoplasm"></div>
+    <div class="msg" id="msg"></div>
+    <div id="hintbox"></div>
+    <div class="rxbox"><span class="label">Reactions</span><div id="rxlist"></div>${atomKey}</div>`;
+  wireTop();
+  const cool = $('cool');
+  if(cool) cool.onclick = ()=>{
+    if(!G.running || G.over) return;
+    if(G.pools.atp<1){ flash('Not enough ATP to cool down.','bad'); return; }
+    G.pools.atp -= 1; G.temp = Math.max(28, G.temp-5); showDelta($('pool-atp'),'−1 ATP','atp');
+  };
+  buildMachines(); renderRx();
+  briefing(i);
+}
+function renderRx(newKey){
+  const L = G.L, box = $('rxlist'); if(!box) return;
+  const keys = [...(L.known||[]), ...(L.discover||[])];
+  box.innerHTML = keys.map(k=>{
+    const blocked = L.blocked===k;
+    if(G.found.has(k) || (L.known||[]).includes(k)) return `<div class="rx ${k===newKey?'new':''}"><strong>${RXN[k].name}${blocked?' · yeast can’t do this one':''}</strong>${blocked?'':eqHTML(RXN[k])}</div>`;
+    return `<div class="rx unknown"><strong>Not discovered yet</strong><span style="font-size:13px">${G.mode==='mito'?'Tap molecules in the matrix to find it.':'Try handing things to each other in the cytoplasm.'}</span></div>`;
+  }).join('');
+}
+function discover(k){
+  if(G.found.has(k)) return;
+  G.found.add(k); renderRx(k);
+  flash(`New reaction found: ${RXN[k].name.toLowerCase()}`, 'good');
+}
+
+function machineName(mi){ return G.L.machines>1 ? `Glycolysis ${'AB'[mi]}` : 'Glycolysis'; }
+function buildMachines(){
+  $('machines').innerHTML = G.machines.map((m,mi)=>`<div class="machine" id="m-${mi}">
+      <div class="mhead"><span class="lblq"><h3>${machineName(mi)}</h3>${qDot('invest')}${qDot('glyconad')}</span><span class="status"></span></div>
+      <div class="stages">
+        <span class="stg" data-s="0">${molSVG('glucose',24)}<small>Glucose<br>6 C</small></span><span class="sarr">→</span>
+        <span class="stg" data-s="1"><span class="pairsv">${molSVG('half',13)}${molSVG('half',13)}</span><small>Split<br>3 C + 3 C</small></span><span class="sarr">→</span>
+        <span class="stg" data-s="2">${molSVG('pyr',24)}<small>2 pyruvate<br>3 C each</small></span>
+      </div>
+      <div class="prog"><i></i><b></b></div>
+      <div class="phases"><span data-p="0">Invest 2 ATP</span><span data-p="1">Payoff 4 ATP + 2 NADH</span></div>
+      <div class="tray" id="tray-${mi}"></div>
+      <button class="btn" id="mb-${mi}" hidden></button></div>`).join('');
+  G.machines.forEach((m,mi)=>{ $('mb-'+mi).onclick=()=>machineButton(mi); });
+}
+function blocker(){ const p=G.pools; if(p.glucose<1) return 'glucose'; if(p.atp<2) return 'atp'; if(p.nad<2) return 'nad'; return null; }
+function startRun(mi){
+  const m = G.machines[mi], p = G.pools, el = $('m-'+mi);
+  p.glucose-=1; p.atp-=2; p.nad-=2; G.car.inUse+=2;
+  m.state='running'; m.t=0; m.held=true;
+  showDelta($('pool-glucose'),'−1 Glucose','glucose'); showDelta($('pool-atp'),'−2 ATP','atp'); showDelta($('carrier'),'−2 NAD⁺','nad');
+  flyChip('glucose', center($('pool-glucose')), center(el), 0, 650);
+  flyChip('atp', center($('pool-atp')), center(el), 80, 650); flyChip('atp', center($('pool-atp')), center(el), 200, 650);
+  flyChip('nad', center($('carrier')), center(el), 120, 650); flyChip('nad', center($('carrier')), center(el), 240, 650);
+}
+function machineButton(mi){
+  if(!G.running || G.over) return;
+  const m = G.machines[mi];
+  if(m.state==='broken'){ m.state='rebuild'; m.t=0; return; }
+  if(m.state==='idle' && !G.L.auto){
+    const b = blocker();
+    if(b){ flash(`Can’t start: need ${b==='glucose'?'1 glucose':'2 '+MOLS[b].label}.`,'bad'); return; }
+    startRun(mi);
+  }
+}
+async function machineDone(mi){
+  const g = G, m = g.machines[mi]; g.anims++;
+  g.car.inUse -= 2; g.car.loaded += 2;
+  const tray = $('tray-'+mi);
+  tray.innerHTML = [['pyr',2],['nadh',2],['atp',4]].map(([k,n])=>`<span class="grp" data-k="${k}" style="--c:${MOLS[k].c}">${molSVG(k,18)}${lbl(k,n)}</span>`).join('');
+  await wait(1100); if(G!==g){ return; }
+  const grp = k => tray.querySelector(`[data-k="${k}"]`);
+  const fromA = center(grp('atp')), fromP = center(grp('pyr')), fromN = center(grp('nadh'));
+  const pA = flyChips('atp',4, fromA, $('pool-atp'), ()=>{ g.pools.atp += 4; });
+  const f = $('field'), fr = f.getBoundingClientRect(), fw = f.clientWidth;
+  const mx = g.L.machines>1 ? (mi===0? fw*0.25 : fw*0.75) : fw/2;
+  const lands = ['pyr','pyr','nadh','nadh'].map((k,j)=>{
+    const x = clamp(mx - 60 + (j%2? 50 : -50) + (Math.random()-.5)*20, 4, fw-130), y = 8 + Math.floor(j/2)*46;
+    return flyChip(k, j<2?fromP:fromN, [fr.left+x+55, fr.top+y+20], j*140, 850).then(()=>{ if(G===g && !g.over) spawnToken(k,x,y); });
+  });
+  tray.innerHTML='';
+  if(m.state==='unloading'){ m.state='idle'; m.t=0; }
+  await Promise.all([pA,...lands]); g.anims--;
+}
+
+/* Tokens in the cytoplasm */
+function fieldSize(){ const f=$('field'); return f?[f.clientWidth,f.clientHeight]:[300,300]; }
+function setTok(t,k){ t.k=k; t.el.style.setProperty('--c',MOLS[k].c); t.el.innerHTML=tokHTML(k); }
+function place(t){ t.el.style.transform = `translate(${t.x}px,${t.y}px)`; }
+function spawnToken(k, x, y, decoy){
+  const f = $('field'); if(!f) return;
+  const [w,h] = fieldSize();
+  const el = document.createElement('button');
+  el.className = 'tok'; f.appendChild(el);
+  const ang = Math.random()*Math.PI*2, sp = 7+Math.random()*8;
+  const t = {k, el, decoy:!!decoy, age:0, busy:false, vx:Math.cos(ang)*sp, vy:Math.abs(Math.sin(ang))*sp+2};
+  setTok(t,k);
+  t.w = el.offsetWidth; t.h = el.offsetHeight;
+  t.x = clamp(x ?? Math.random()*(w-t.w), 2, w-t.w-2); t.y = clamp(y ?? Math.random()*(h-t.h), 2, h-t.h-2);
+  place(t); el.onclick = ()=>(G && G.mode==='mito' ? tapMito : tapToken)(t);
+  G.tokens.push(t);
+  return t;
+}
+function detach(t){ G.tokens = G.tokens.filter(x=>x!==t); if(G.sel===t) select(null); t.busy=true; t.el.classList.add('busy','moving'); }
+function select(t){ if(G.sel) G.sel.el.classList.remove('sel'); G.sel=t; if(t) t.el.classList.add('sel'); }
+function relPos(el){ const f=$('field').getBoundingClientRect(), r=el.getBoundingClientRect(); return [r.left-f.left, r.top-f.top, r.width, r.height]; }
+function caption(text, x, y){
+  const c=document.createElement('div'); c.className='rxcap'; c.textContent=text; $('field').appendChild(c);
+  const [w] = fieldSize(); c.style.left = clamp(x, 4, Math.max(4, w-c.offsetWidth-4))+'px'; c.style.top = Math.max(4,y)+'px';
+  return c;
+}
+
+function tapToken(t){
+  if(!G || !G.running || G.over || t.busy || G.lock>0) return;
+  const L = G.L;
+  if(L.yeast && t.k==='pyr' && !(G.sel && G.sel.k==='nadh')){ select(null); decarb(t); return; }
+  if(!G.sel){ select(t); return; }
+  if(G.sel===t){ select(null); return; }
+  const a = G.sel, b = t;
+  const nadh = a.k==='nadh' ? a : b.k==='nadh' ? b : null;
+  const other = nadh===a ? b : a;
+  if(!nadh || other.k==='nadh'){ select(t); return; }
+  const taker = L.yeast ? 'acet' : 'pyr';
+  if(other.k===taker){ select(null); transfer(nadh, other, L.yeast?'adh':'lactic'); return; }
+  select(null); bounce(nadh, other, (L.yeast && other.k==='pyr') ? PAIR_WRONG.yeastPyr : PAIR_WRONG[other.k] || 'That can’t take NADH’s electrons.');
+}
+
+/* ================= "Why?" explainers ================= */
+const HILL = `<svg class="whyfig" viewBox="0 0 300 132" role="img" aria-label="Energy hill: electrons step down from glucose to NADH to the chain to oxygen">
+  <path d="M10 20 H70 V48 H130 V76 H190 V104 H290" fill="none" stroke="var(--line)" stroke-width="3"/>
+  <circle cx="40" cy="12" r="7" fill="var(--atomE)" stroke="#B98A00"/><circle cx="100" cy="40" r="7" fill="var(--atomE)" stroke="#B98A00" opacity=".55"/><circle cx="160" cy="68" r="7" fill="var(--atomE)" stroke="#B98A00" opacity=".35"/><circle cx="214" cy="96" r="7" fill="var(--atomE)" stroke="#B98A00" opacity=".2"/>
+  <text x="12" y="38" class="wf">in glucose</text><text x="12" y="49" class="wf2">C–H bonds</text>
+  <text x="72" y="66" class="wf">on NADH</text><text x="132" y="94" class="wf">along the chain</text>
+  <text x="194" y="122" class="wf">with oxygen → water</text>
+  <text x="290" y="16" class="wf2" text-anchor="end">high energy</text><text x="290" y="90" class="wf2" text-anchor="end">low energy</text>
+</svg>`;
+const WHY = {
+  enzyme:{q:'What does “held in an enzyme” mean?', a:[
+    'An enzyme is a large protein folded so it has a pocket, called the active site, shaped to fit one particular molecule. Pyruvate slips into that pocket and is held there by weak attractions, a bit like a key in a lock.',
+    'Parts of the enzyme now sit right against specific bonds in pyruvate. They tug on its electrons and hold everything at exactly the right angle, so a reaction that would almost never happen on its own happens thousands of times a second. Afterward the products drift out and the enzyme is unchanged, ready for the next pyruvate.',
+    'Pyruvate dehydrogenase is actually three enzymes working as a team, passing the pyruvate along, with helpers made from B vitamins doing parts of the chemistry. “Dehydrogenase” means an enzyme that removes hydrogen, which really means removing electrons along with an H.']},
+  hiE:{q:'What makes electrons “high-energy”?', fig:HILL, a:[
+    'Electrons aren’t high- or low-energy by themselves. What matters is how tightly they’re held. Oxygen pulls on electrons harder than almost any other atom, while carbon and hydrogen share theirs fairly evenly.',
+    'So electrons in the C–H and C–C bonds of food molecules sit high up an energy hill, and electrons pulled close to oxygen sit at the bottom. Respiration moves electrons from carbon down to oxygen one small step at a time, catching energy at each step. Burning sugar makes the same trip in one jump and releases it all as heat.']},
+  co2leave:{q:'Why does that carbon leave?', a:[
+    'Pyruvate’s end carbon is already bonded to two oxygens, so oxygen has pulled its electrons about as far as they can go. As CO₂ it is a very stable, low-energy molecule, so breaking it off is a downhill step.',
+    'It still doesn’t happen on its own: pyruvate is stable in water. The enzyme puts a helper (made from vitamin B1) right next to that bond, giving the bond’s electrons somewhere to go so the carbon can break away.',
+    'The carbon leaves without the electron pair from the bond that held it on. That pair stays on the 2-carbon piece. In the mitochondrion it is the pair handed to NAD⁺ next. In yeast fermentation it simply stays put, and the leftover piece becomes acetaldehyde.']},
+  nad:{q:'What is NAD⁺, really?', a:[
+    'NAD⁺ is a small carrier molecule made from vitamin B3 (niacin). One end of it can grab a pair of electrons together with a hydrogen. That loaded form is NADH.',
+    'NAD⁺ doesn’t make energy. It moves high-energy electrons from where they are pulled off food to where they can be used. A cell has only a limited amount, so each one must be unloaded and reused over and over. If they all stay loaded, every step that needs an empty carrier stops. That is the stall in level 2.']},
+  ferment:{q:'Why not just keep the NADH?', see:['glyconad','nad'], a:[
+    'Because the cell can’t make new NAD⁺ fast enough to replace it. Glycolysis needs 2 empty NAD⁺ for every glucose, and a cell has only a small supply.',
+    'Without oxygen, mitochondria can’t unload NADH, so fermentation does it the cheap way: it dumps the electrons onto pyruvate. That throws away their energy (fermentation makes no ATP), but it keeps glycolysis and its 2 ATP per glucose going. For a sprinting muscle, a little ATP now beats none.']},
+  invest:{q:'Why spend ATP to make ATP?', a:[
+    'Glucose is a stable molecule and hard to split. Glycolysis first moves phosphate groups from 2 ATP onto it. The charged phosphates make glucose easier to break in half, and they also trap it in the cell, because a charged molecule can’t slip back out through the membrane.',
+    'The 4 ATP made later come from the two halves. It’s an investment that pays back double.'], see:['glyconad']},
+  glyconad:{q:'Why does glycolysis need NAD⁺?', a:[
+    'Splitting glucose only gets it ready. The real energy step comes next: each 3-carbon half gives up a pair of high-energy electrons (with a hydrogen), and an enzyme hands that pair to NAD⁺, making NADH. With no empty NAD⁺ to take the pair, this step can’t happen, and glycolysis stops right there. That is the stall in level 2.',
+    'Removing those electrons releases energy, and the enzyme uses it to attach a second phosphate to each half. This phosphate comes from loose phosphate in the cell, not from ATP. Now each half carries two phosphates: one from the invested ATP and one added in this step.',
+    'In the payoff steps, each half hands both phosphates to ADP, making 2 ATP per half and 4 in all. So taking the electrons is what powers half of glycolysis’s ATP, and NADH keeps the rest of their energy for later, if the cell has oxygen.'], see:['invest','nad','hiE']},
+  atp:{q:'Why does ATP carry energy?', a:[
+    'ATP has three phosphate groups in a row, each carrying negative charge. Packing charges that repel each other so close together is like squeezing a spring.',
+    'Breaking off the last phosphate (leaving ADP) lets the spring relax and releases energy, which enzymes link to jobs like contracting a muscle. That repulsion is one big reason; how water surrounds the products helps too. Rebuilding ATP from ADP and phosphate takes energy in, which is what glycolysis and ATP synthase supply.']},
+  heat:{q:'Why does heat break enzymes?', a:[
+    'An enzyme’s shape is held together mostly by many weak attractions between parts of its folded protein chain. A little heat makes molecules move faster and meet the enzyme more often, so reactions speed up.',
+    'Too much heat shakes those weak attractions apart and the protein unfolds. The active site loses its shape and the enzyme stops working. Cooling it down doesn’t refold it, the same way a cooked egg white doesn’t turn clear again.']},
+  coa:{q:'What is coenzyme A?', a:[
+    'Coenzyme A is a reusable helper molecule made from vitamin B5. Its working end has a sulfur atom that bonds to the acetyl group.',
+    'That sulfur bond holds a lot of energy, and releasing it helps drive the next step, when the acetyl joins the Krebs cycle’s starter molecule. CoA itself comes out unchanged, so it lets go and picks up another acetyl. One CoA can carry thousands of acetyls.']},
+  cycle:{q:'Why is the Krebs cycle a cycle?', a:[
+    'A 2-carbon acetyl group is hard to take apart directly. So the cell attaches it to a 4-carbon molecule it keeps on hand, making a 6-carbon molecule whose bonds its enzymes can rearrange and snip one at a time. Each snip releases CO₂ and a pair of electrons.',
+    'After two carbons have left, the remaining 4 carbons are reshaped back into the original starter. The cell only needs a small supply of it, like a tray that keeps coming back around an assembly line.']},
+  pump:{q:'How can moving electrons pump H⁺?', a:[
+    'Each complex in the chain is a protein built into the inner membrane, and each one holds electrons a bit more tightly than the one before. So every time the electrons move to the next complex, they drop a little further down the energy hill.',
+    'The complex uses that released energy to change shape, and the shape change pushes H⁺ from the matrix across the membrane, like a pump driven by a falling weight. The step at complex II releases too little energy to pump, so electrons from FADH₂, which enter there, skip one pump.']},
+  o2:{q:'Why is oxygen at the end?', fig:HILL, a:[
+    'Oxygen pulls on electrons harder than anything else in the chain, so it is the very bottom of the energy hill. That final pull is what keeps electrons moving down the chain. When oxygen takes them, it also picks up H⁺ and becomes water.',
+    'Without oxygen nothing takes the electrons off complex IV. They back up through the whole chain, the carriers can’t unload, and the pumping stops. That is why you can’t survive long without oxygen, and why cyanide, which blocks complex IV, is so deadly.']},
+  gradient:{q:'How can a crowd of H⁺ store energy?', a:[
+    'Think of water behind a dam. The chain pumps H⁺ into the narrow space outside the matrix until it is far more crowded there than inside. H⁺ is also positively charged, so the outside becomes positive too.',
+    'Both push H⁺ to flow back in, but the membrane blocks it. The only open path is through ATP synthase, so the flow can be made to do work, just as water behind a dam is made to turn a turbine.']},
+  synthase:{q:'Does ATP synthase really spin?', a:[
+    'Yes. ATP synthase is a real rotary motor, one of the smallest known. H⁺ flowing through it turns a ring of proteins in the membrane, which spins a central stalk at up to about 100 turns per second.',
+    'The stalk is lopsided, so as it turns it squeezes three binding sites in the head one after another, pressing ADP and phosphate together into ATP. One full turn makes 3 ATP. Counting the H⁺ also used to bring phosphate into the matrix, it works out to about 4 H⁺ per ATP, the number this game uses.']},
+  uncoupler:{q:'What is an uncoupler?', a:[
+    'An uncoupler is a molecule that carries H⁺ across the inner membrane, letting the crowd leak back without going through ATP synthase. The chain keeps running and oxygen is still used, but the energy comes out as heat instead of ATP.',
+    'In the 1930s a chemical called DNP was sold as a diet pill for exactly this reason. It burned fat but could cause deadly overheating, and it was banned. The body uses the same trick on purpose in brown fat, where a protein called thermogenin opens a controlled leak to keep newborns and hibernating animals warm.']}
+};
+const qChips = list => (list||[]).filter(k=>WHY[k]).map(k=>`<button class="qchip" type="button" data-why="${k}">${WHY[k].q}</button>`).join('');
+const qDot = (k,label) => `<button class="qdot" type="button" data-why="${k}" aria-label="${label||WHY[k].q}" title="${WHY[k].q}">?</button>`;
+function setQs(el, list){ if(el) el.innerHTML = qChips(list); }
+function openWhy(k){
+  const w = WHY[k]; if(!w) return;
+  const g = G, holds = !!(g && !g.over);
+  if(holds) g.spot = (g.spot||0)+1;
+  const d = document.createElement('div'); d.className='qpop';
+  d.innerHTML = `<div class="qcard" role="dialog" aria-modal="true"><span class="label">Why it works${holds?' · clock paused':''}</span><h3>${w.q}</h3>${w.fig||''}${w.a.map(p=>`<p>${p}</p>`).join('')}${w.see?`<span class="label">Related</span><div class="qrow left">${qChips(w.see)}</div>`:''}<button class="btn" type="button">Got it</button></div>`;
+  document.body.appendChild(d);
+  const close = ()=>{ d.remove(); if(holds && G===g) g.spot--; };
+  d.querySelector('.qcard > .btn').onclick = close;
+  d.addEventListener('click', e=>{ if(e.target===d) close(); });
+  d.querySelector('.qcard > .btn').focus({preventScroll:true});
+}
+document.addEventListener('click', e=>{ const b = e.target.closest && e.target.closest('[data-why]'); if(b){ e.preventDefault(); e.stopPropagation(); openWhy(b.dataset.why); } }, true);
+
+/* Spotlight: pause the clock, zoom the reaction up large, then shrink it back into the cytoplasm */
+const SPOT_SLOW = 2; // the first uses of each reaction per level are shown slowly with time to read; later ones play quickly
+const SPOT_TEXT = {
+  lactic:['NADH is carrying a pair of electrons (the yellow dots). Glycolysis can’t reuse this carrier until they’re unloaded.',
+          'Pyruvate took the electrons and became lactate. The carrier is empty NAD⁺ again, ready to go back to glycolysis.'],
+  adh:['NADH is carrying a pair of electrons. In yeast, acetaldehyde is the molecule that can take them.',
+       'Acetaldehyde took the electrons and became ethanol. The carrier is empty NAD⁺ again.'],
+  decarb:['Pyruvate has 3 carbons (the dark dots). Watch one of them leave.',
+          'One carbon left as CO₂, the gas that makes bread dough rise. The 2-carbon piece left behind is acetaldehyde.']
+};
+const pause = ms => new Promise(r=>setTimeout(r,ms));
+let bigH = 64;
+function bigInner(d,k,n){ d.style.setProperty('--c',MOLS[k].c); d.innerHTML=`${molSVG(k,bigH)}<span>${lbl(k,n)}</span>`; }
+function bigTile(k,n){ const d=document.createElement('div'); d.className='bigmol'; bigInner(d,k,n); return d; }
+function setBig(d,k,n){ bigInner(d,k,n); d.classList.remove('swap'); void d.offsetWidth; d.classList.add('swap'); }
+function zoom(tile, src, dir, quick){
+  if(reduceMotion || !src) return Promise.resolve();
+  const s=src.getBoundingClientRect(), t=tile.getBoundingClientRect();
+  const dx=(s.left+s.width/2)-(t.left+t.width/2), dy=(s.top+s.height/2)-(t.top+t.height/2), sc=Math.max(.2, Math.min(1, s.width/t.width));
+  const small={transform:`translate(${dx}px,${dy}px) scale(${sc})`}, big={transform:'none'};
+  return tile.animate(dir==='in'?[small,big]:[big,small],{duration:quick?(dir==='in'?320:280):(dir==='in'?550:450),easing:'cubic-bezier(.3,0,.2,1)',fill:'forwards'}).finished.catch(()=>{});
+}
+function fade(el, dir, quick){ if(reduceMotion) return Promise.resolve(); return el.animate(dir==='in'?[{opacity:0},{opacity:1}]:[{opacity:1},{opacity:0}],{duration:quick?250:350,fill:'forwards'}).finished.catch(()=>{}); }
+/* o = {title, srcs:[elements to zoom from], dests:[elements to shrink back to], ins:[[key,count]],
+        hop:[from,to] (electrons move between tiles), swaps:{tileIndex:[key,count] or null to remove}, add:[[key,count]],
+        text:[before,after], go:button label, onSwap} */
+async function spotlight(g, o, quick){
+  g.spot++; bigH = quick ? 40 : 64;
+  const ov=document.createElement('div'); ov.className='spot'+(quick?' quick':'');
+  ov.innerHTML=`<div class="spotcard"><span class="label">${o.title} · clock paused</span><div class="spotrow"></div><p class="spotcap"></p><div class="qrow"></div><button class="btn go" type="button" hidden></button></div>`;
+  document.body.appendChild(ov);
+  const row=ov.querySelector('.spotrow'), cap=ov.querySelector('.spotcap'), btn=ov.querySelector('.go');
+  if(!quick) setQs(ov.querySelector('.qrow'), o.qs);
+  // slow version: the student clicks to move on after each part; quick version: short timed pauses
+  let next=null; btn.onclick=()=>{ if(next){ const n=next; next=null; n(); } };
+  const holdOrClick = (ms, text) => quick ? pause(ms) : new Promise(r=>{ btn.textContent=text; btn.hidden=false; btn.focus({preventScroll:true}); next=()=>{ btn.hidden=true; r(); }; });
+  const tiles=[];
+  const addTile=(k,n,anim)=>{ const t=bigTile(k,n); if(tiles.length){ const op=document.createElement('span'); op.className='op'; op.textContent='+'; row.appendChild(op); t._op=op; } row.appendChild(t); tiles.push(t);
+    if(anim && !reduceMotion) t.animate([{transform:'scale(.3)',opacity:0},{transform:'none',opacity:1}],{duration:quick?350:600,easing:'ease-out'}); return t; };
+  o.ins.forEach(([k,n])=>addTile(k,n));
+  cap.textContent=o.text[0];
+  const pick = (arr,i)=> arr && arr.length ? arr[Math.min(i,arr.length-1)] : null;
+  fade(ov,'in',quick); await Promise.all(tiles.map((t,i)=>zoom(t, pick(o.srcs,i), 'in', quick)));
+  await holdOrClick(150, o.go||'Show the reaction');
+  const sw=o.swaps||{}, gone=[];
+  const apply=i=>{ if(!(i in sw)) return; const v=sw[i], t=tiles[i]; if(v===null){ t.style.opacity='.25'; gone.push(t); } else setBig(t,v[0],v[1]); };
+  if(o.hop){
+    const [a,b]=o.hop, rr=row.getBoundingClientRect(), A=tiles[a].querySelector('svg').getBoundingClientRect(), B=tiles[b].querySelector('svg').getBoundingClientRect();
+    const pk=document.createElement('div'); pk.className='packet'; pk.innerHTML=molSVG('packet',quick?26:40); row.appendChild(pk);
+    const half=quick?8:12, carrier=['nadh','fadh2'].includes(o.ins[a][0]);
+    const sx=A.left-rr.left+(carrier?A.width*.62:A.width/2-half), sy=A.top-rr.top-8, ex=B.left-rr.left+B.width/2-half, ey=B.top-rr.top-8;
+    pk.style.left=sx+'px'; pk.style.top=sy+'px';
+    apply(a);
+    if(!reduceMotion) await pk.animate([{transform:'translate(0,0) scale(1)'},{transform:`translate(${(ex-sx)/2}px,${quick?-28:-46}px) scale(1.25)`},{transform:`translate(${ex-sx}px,${ey-sy}px) scale(1)`}],{duration:quick?500:1100,easing:'ease-in-out',fill:'forwards'}).finished.catch(()=>{});
+    pk.remove();
+    Object.keys(sw).forEach(i=>{ if(+i!==a) apply(+i); });
+    if(sw[b]!==null) tiles[b].classList.add('glow');
+  } else Object.keys(sw).forEach(i=>apply(+i));
+  gone.forEach(t=>{ if(t._op) t._op.remove(); else { const nx=t.nextElementSibling; if(nx && nx.classList.contains('op')) nx.remove(); } t.remove(); });
+  const live = tiles.filter(t=>!gone.includes(t));
+  (o.add||[]).forEach(([k,n])=>live.push(addTile(k,n,true)));
+  o.onSwap && o.onSwap();
+  cap.textContent=o.text[1];
+  await holdOrClick(400,'Continue');
+  btn.hidden=true;
+  const back = o.dests || o.srcs;
+  fade(ov,'out',quick); await Promise.all(live.map(t=>zoom(t, pick(back, tiles.indexOf(t)), 'out', quick)));
+  ov.remove(); g.spot--;
+}
+/* A smaller narration card for steps that play out on the page itself (the electron transport chain) */
+function narrPanel(g, title){ g.spot++; const d=document.createElement('div'); d.className='narr'; d.innerHTML=`<span class="label">${title} · clock paused</span><p></p><div class="qrow"></div><button class="btn go" type="button" hidden></button>`; document.body.appendChild(d); return d; }
+function narrStep(d, text, btnText, qs){ return new Promise(r=>{ d.querySelector('p').textContent=text; setQs(d.querySelector('.qrow'), qs); const b=d.querySelector('.go'); b.textContent=btnText; b.hidden=false; b.focus({preventScroll:true}); b.onclick=()=>{ b.hidden=true; r(); }; }); }
+function narrEnd(g, d){ d.remove(); g.spot--; }
+
+/* NADH hands its electrons to a taker: meet, electrons hop, products show, then fly to the stores */
+async function transfer(a, b, rk){
+  const g = G, rx = RXN[rk], product = rx.out[1][0]; g.anims++;
+  detach(a); detach(b);
+  const [fw,fh] = fieldSize();
+  const tw = a.w + b.w + 14;
+  const left = clamp((a.x+b.x)/2 + (a.w+b.w)/4 - tw/2, 4, fw-tw-4);
+  const top = clamp((a.y+b.y)/2, 50, fh-Math.max(a.h,b.h)-6);
+  a.x=left; a.y=top; b.x=left+a.w+14; b.y=top; place(a); place(b);
+  await wait(500); if(G!==g) return;
+  {
+    const quick = (g.spotN[rk]||0) >= SPOT_SLOW; g.spotN[rk]=(g.spotN[rk]||0)+1;
+    const taker = b.k;
+    await spotlight(g, {title:RXN[rk].name, srcs:[a.el,b.el], ins:[['nadh'],[taker]], hop:[0,1], swaps:{0:['nad'],1:[product]}, text:SPOT_TEXT[rk], go:'Hand over the electrons', qs:['ferment','nad'],
+      onSwap:()=>{ setTok(a,'nad'); setTok(b,product); g.car.loaded-=1; g.car.inUse+=1; }}, quick);
+    if(G!==g) return;
+    b.el.classList.add('glow'); discover(rk);
+    await wait(500); if(G!==g) return;
+    const pa = flyChips('nad',1, center(a.el), $('carrier'), ()=>{ g.pools.nad+=1; g.car.inUse-=1; });
+    const pb = flyChips(product,1, center(b.el), $('pool-'+product), ()=>{ g.pools[product]+=1; });
+    a.el.remove(); b.el.remove();
+    await Promise.all([pa,pb]); g.anims--; return;
+  }
+  const cap = caption(rx.cap, left, top-46);
+  const pk = document.createElement('div'); pk.className='packet'; pk.innerHTML=molSVG('packet',22); $('field').appendChild(pk);
+  const [ax,ay] = relPos(a.el.querySelector('svg')), [bx,by,bw] = relPos(b.el.querySelector('svg'));
+  const sx = ax+18, sy = ay-6, ex = bx+bw/2-7, ey = by-6;
+  pk.style.left=sx+'px'; pk.style.top=sy+'px';
+  setTok(a,'nad'); a.el.classList.add('swap'); g.car.loaded -= 1; g.car.inUse += 1;
+  if(!reduceMotion) await pk.animate([{transform:'translate(0,0)'},{transform:`translate(${(ex-sx)/2}px,-24px)`},{transform:`translate(${ex-sx}px,${ey-sy}px)`}],{duration:700,easing:'ease-in-out',fill:'forwards'}).finished.catch(()=>{});
+  if(G!==g) return;
+  pk.remove(); setTok(b,product); b.el.classList.add('swap','glow');
+  if(rk!=='lactic' || !g.found.has('lactic')) discover(rk);
+  await wait(1400); if(G!==g) return;
+  cap.remove();
+  const pa = flyChips('nad',1, center(a.el), $('carrier'), ()=>{ g.pools.nad+=1; g.car.inUse-=1; });
+  const pb = flyChips(product,1, center(b.el), $('pool-'+product), ()=>{ g.pools[product]+=1; });
+  a.el.remove(); b.el.remove();
+  await Promise.all([pa,pb]); g.anims--;
+}
+/* Yeast step 1: pyruvate releases CO2 */
+async function decarb(t){
+  const g = G; g.anims++;
+  detach(t);
+  const [fw] = fieldSize();
+  t.y = Math.max(t.y, 50); place(t);
+  const big = true, quick = (g.spotN.decarb||0) >= SPOT_SLOW; g.spotN.decarb=(g.spotN.decarb||0)+1;
+  await pause(80); await spotlight(g, {title:RXN.decarb.name, srcs:[t.el], ins:[['pyr']], swaps:{0:['acet']}, add:[['co2']], text:SPOT_TEXT.decarb, go:'Release the carbon', qs:['co2leave'], onSwap:()=>setTok(t,'acet')}, quick); if(G!==g) return;
+  const cap = big ? document.createElement('div') : caption(RXN.decarb.cap, t.x, t.y-46);
+  if(!big){ await wait(300); if(G!==g) return; }
+  setTok(t,'acet'); t.el.classList.add('swap');
+  const c = document.createElement('div'); c.className='tok busy moving'; c.style.setProperty('--c',MOLS.co2.c); c.innerHTML=tokHTML('co2'); $('field').appendChild(c);
+  const cx = clamp(t.x + t.w + 10, 4, fw - c.offsetWidth - 4);
+  c.style.transform = `translate(${t.x}px,${t.y}px) scale(.5)`; void c.offsetWidth;
+  c.style.transform = `translate(${cx}px,${t.y}px)`;
+  discover('decarb');
+  await wait(big?600:1400); if(G!==g) return;
+  cap.remove();
+  const pc = flyChips('co2',1, center(c), $('pool-co2'), ()=>{ g.pools.co2+=1; });
+  c.remove();
+  t.w = t.el.offsetWidth; t.busy=false; t.el.classList.remove('busy','moving','swap');
+  if(!g.over) g.tokens.push(t);
+  await pc; g.anims--;
+}
+/* Wrong pairing: move toward each other, then bounce apart */
+async function bounce(a, b, why){
+  const g = G; G.lock = 0.9; g.fumbles++;
+  [a,b].forEach(t=>{ t.busy=true; t.el.classList.add('moving','wrong'); });
+  const ax=a.x, ay=a.y, bx=b.x, by=b.y, mx=(ax+bx)/2, my=(ay+by)/2;
+  a.x=ax+(mx-ax)*.6; a.y=ay+(my-ay)*.6; b.x=bx+(mx-bx)*.6; b.y=by+(my-by)*.6; place(a); place(b);
+  flash(why,'bad');
+  await wait(460); if(G!==g) return;
+  a.x=ax; a.y=ay; b.x=bx; b.y=by; place(a); place(b);
+  await wait(460); if(G!==g) return;
+  [a,b].forEach(t=>{ t.busy=false; t.el.classList.remove('moving','wrong'); });
+  if(b.decoy && G.tokens.includes(b)){ b.el.remove(); G.tokens=G.tokens.filter(x=>x!==b); }
+}
+
+function tempFactor(T){
+  if(!G.L.temp) return 1;
+  const f = T>=37 ? 1-Math.pow((T-37)/9.5,2) : 1-Math.pow((37-T)/14,2);
+  return Math.max(0.05,f);
+}
+function tickHands(dt){
+  if(G.spot>0) return; // clock, machines, muscle and drift all wait while a reaction is spotlighted
+  const L = G.L, p = G.pools; G.time += dt;
+  if(G.lock>0) G.lock -= dt;
+  if(L.temp){
+    G.temp += L.temp.rise*dt;
+    if(G.temp>=46) G.machines.forEach(m=>{
+      if(m.state==='running'||m.state==='idle'||m.state==='rebuild'){
+        if(m.held){ p.nad += 2; G.car.inUse -= 2; m.held=false; }
+        m.state='broken'; m.t=0; flash('Too hot! The glycolysis enzymes denatured. Cool down, then rebuild.','bad');
+      }
+    });
+  }
+  const rate = tempFactor(G.temp);
+  let active = G.anims>0;
+  G.machines.forEach((m,mi)=>{
+    if(m.state==='rebuild'){ active=true; m.t+=dt; if(m.t>=2){ m.state='idle'; m.t=0; } return; }
+    if(m.state==='idle' && L.auto && !blocker()) startRun(mi);
+    if(m.state==='running'){
+      active = true; m.t += dt*rate;
+      if(m.t>=L.cycle){ m.state='unloading'; m.held=false; machineDone(mi); }
+    }
+    if(m.state==='unloading') active = true;
+  });
+  if(L.drain){
+    G.drainT += dt;
+    if(G.drainT>=L.drain){
+      if(p.atp>=1){
+        G.drainT -= L.drain; p.atp-=1;
+        const mu=$('muscle'); showDelta($('pool-atp'),'−1 ATP','atp');
+        flyChip('atp', center($('pool-atp')), center(mu), 0, 650).then(()=>{ if(!mu.isConnected) return; mu.classList.add('pulse'); setTimeout(()=>mu.classList.remove('pulse'),400); });
+      } else if(G.anims===0) return endLevel(false,'The muscle ran out of ATP.');
+      else G.drainT = L.drain; // ATP is on its way: wait for it
+    }
+  }
+  G.decoyT -= dt;
+  if(G.decoyT<=0){
+    G.decoyT = 4 + Math.random()*3;
+    if(G.tokens.filter(t=>t.decoy).length<2 && L.decoys) spawnToken(L.decoys[Math.floor(Math.random()*L.decoys.length)], null, null, true);
+  }
+  const [w,h] = fieldSize();
+  for(const t of [...G.tokens]){
+    t.age += dt;
+    if(t.decoy && t.age>16 && !t.busy){ t.el.remove(); G.tokens=G.tokens.filter(x=>x!==t); if(G.sel===t) G.sel=null; continue; }
+    if(t.decoy && t.age>13) t.el.classList.add('fade');
+    if(t.busy) continue;
+    t.x += t.vx*dt; t.y += t.vy*dt;
+    if(t.x<2){t.x=2;t.vx=Math.abs(t.vx);} if(t.x>w-t.w-2){t.x=w-t.w-2;t.vx=-Math.abs(t.vx);}
+    if(t.y<2){t.y=2;t.vy=Math.abs(t.vy);} if(t.y>h-t.h-2){t.y=h-t.h-2;t.vy=-Math.abs(t.vy);}
+    place(t);
+  }
+  if(L.goal.type==='atp' && p.atp>=L.goal.target) return endLevel(true);
+  if(L.goal.type==='survive' && G.time>=L.goal.duration) return endLevel(true);
+  if(L.goal.limit && G.time>=L.goal.limit) return endLevel(false,'Time ran out before the ATP tank filled.');
+  if(!active){ G.stallT += dt; if(G.stallT>5 && !G.hintOn){ G.hintOn=true; $('hintbox').innerHTML=`<div class="hint"><strong>Glycolysis is stuck.</strong> ${L.hint}</div>`; } }
+  else G.stallT = 0;
+}
+
+function renderHands(){
+  const L = G.L, p = G.pools;
+  ['glucose','atp','lactate','ethanol','co2'].forEach(k=>{
+    const el = $('pool-'+k); if(!el) return;
+    const v = el.querySelector('.v'); if(v.textContent!==String(p[k])) v.textContent=p[k];
+    if(k==='atp'||k==='glucose') el.classList.toggle('low', (k==='atp'&&p.atp<2)||(k==='glucose'&&p.glucose<1));
+  });
+  const key = p.nad+'/'+G.car.inUse+'/'+G.car.loaded;
+  if(cache.car!==key){
+    cache.car = key; let h='';
+    for(let i=0;i<p.nad;i++) h+='<span></span>';
+    for(let i=0;i<G.car.inUse;i++) h+='<span class="busy"></span>';
+    for(let i=0;i<G.car.loaded;i++) h+='<span class="full"></span>';
+    $('dots').innerHTML = h;
+    $('carrier').classList.toggle('empty', p.nad<2 && G.car.loaded>0);
+    setText('carriertxt', `${p.nad} empty · ${G.car.loaded} loaded`);
+  }
+  let frac;
+  if(L.goal.type==='survive'){ frac=G.time/L.goal.duration; setText('goaltxt','Keep the muscle powered'); setText('clock', fmt(L.goal.duration-G.time)+' left'); }
+  else { frac=p.atp/L.goal.target; setText('goaltxt',`ATP ${p.atp} / ${L.goal.target}`); setText('clock', L.goal.limit ? fmt(L.goal.limit-G.time)+' left' : fmt(G.time)); }
+  $('goalbar').style.width = clamp(frac*100,0,100)+'%';
+  if(L.temp){ setText('tempv', G.temp.toFixed(1)+'°C'); $('tempmark').style.left = clamp((G.temp-28)/(48-28)*100,0,100)+'%'; }
+  setText('fieldtip', G.sel ? (G.sel.k==='nadh' ? 'NADH selected: now tap what should take its electrons' : `Selected: ${MOLS[G.sel.k].label}`) : (L.yeast ? 'Tap one molecule, or two to pair them' : 'Tap two molecules to pair them'));
+  const b = blocker(), rate = tempFactor(G.temp);
+  G.machines.forEach((m,mi)=>{
+    const el = $('m-'+mi), btn = $('mb-'+mi);
+    let cls='machine', status='', prog=0, btnTxt='', showBtn=false, dis=false;
+    if(m.state==='running'){ cls+=' running'; prog=m.t/L.cycle; status = rate<0.7 ? 'Slowed by heat' : (prog<.5?'Investing':'Paying off'); }
+    else if(m.state==='unloading'){ cls+=' running'; status='Done!'; prog=1; }
+    else if(m.state==='broken'){ cls+=' broken'; status='Denatured'; showBtn=true; btnTxt='Rebuild'; }
+    else if(m.state==='rebuild'){ status='Rebuilding…'; prog=m.t/2; }
+    else if(L.auto){ cls+=' waiting'; status = b ? `Waiting for ${b==='glucose'?'glucose':MOLS[b].label}` : 'Ready'; }
+    else { cls+= b ? ' waiting' : ''; status = b ? `Needs ${b==='glucose'?'glucose':'2 '+MOLS[b].label}` : 'Ready'; showBtn=true; btnTxt='Start · invest 2 ATP'; dis=!!b; }
+    const stage = (m.state==='running'||m.state==='unloading') ? (prog<.4?0:prog<.6?1:2) : -1;
+    const sig = cls+'|'+status+'|'+showBtn+'|'+btnTxt+'|'+dis+'|'+stage;
+    if(cache['m'+mi]!==sig){
+      cache['m'+mi]=sig; el.className=cls; el.querySelector('.status').textContent=status;
+      el.querySelectorAll('.stg').forEach(s=>s.classList.toggle('on', +s.dataset.s===stage || (stage<0 && m.state!=='broken' && +s.dataset.s===0)));
+      el.querySelectorAll('.phases span').forEach(s=>s.classList.toggle('on', stage>=0 && +s.dataset.p===(prog<.5?0:1)));
+      btn.hidden=!showBtn; btn.textContent=btnTxt; btn.disabled=dis; btn.classList.toggle('warnb', m.state==='broken');
+    }
+    el.querySelector('.prog i').style.width = Math.min(100,prog*100)+'%';
+  });
+}
+
+/* ================= Step-by-step scenes: atoms move instead of pictures swapping ================= */
+function mvA(d,x,y){ d._x=x; d._y=y; d.style.transform=`translate(${x}px,${y}px) translate(-50%,-50%)`; }
+function sAt(st,kind,x,y,hidden){ const d=document.createElement('div'); d.className='sa atom at-'+kind; if(hidden) d.style.opacity='0'; st.appendChild(d); mvA(d,x,y); return d; }
+function sBox(st,text,c,x,y,slot){ const d=document.createElement('div'); d.className='sa sbox'; d.style.setProperty('--c',c); d.innerHTML=`<span>${text}</span>${slot?'<i></i>':''}`; st.appendChild(d); mvA(d,x,y); return d; }
+function boxText(d,t){ d.querySelector('span').textContent=t; }
+function sTag(st,text,x,y,cls){ const d=document.createElement('div'); d.className='sa stag '+(cls||''); d.textContent=text; st.appendChild(d); mvA(d,x,y); return d; }
+function sOut(st,label,c,cx,cy,w,h,cls){ const d=document.createElement('div'); d.className='soutline '+(cls||''); d.style.setProperty('--c',c); d.innerHTML=`<b>${label}</b>`; st.appendChild(d); setOut(d,cx,cy,w,h); return d; }
+function setOut(d,cx,cy,w,h,label){ d.style.left=(cx-w/2)+'px'; d.style.top=(cy-h/2)+'px'; d.style.width=w+'px'; d.style.height=h+'px'; if(label) d.querySelector('b').textContent=label; }
+const STEP_MS = 850;
+
+async function sceneSpot(g, build, src){
+  g.spot++;
+  const ov=document.createElement('div'); ov.className='spot';
+  ov.innerHTML=`<div class="spotcard scene"><span class="label"></span><div class="stagewrap"><div class="stage"></div></div><p class="spotcap"></p><div class="qrow"></div><button class="btn go" type="button" hidden></button></div>`;
+  document.body.appendChild(ov);
+  const card=ov.querySelector('.spotcard'), wrap=ov.querySelector('.stagewrap'), st=ov.querySelector('.stage'), cap=ov.querySelector('.spotcap'), btn=ov.querySelector('.go'), qr=ov.querySelector('.qrow');
+  const sc = build(st);
+  const s = Math.min(1, wrap.clientWidth/320);
+  st.style.height = sc.h+'px'; st.style.transform = `scale(${s})`; wrap.style.height = (sc.h*s)+'px';
+  ov.querySelector('.label').textContent = sc.title+' · clock paused';
+  cap.textContent = sc.intro; setQs(qr, sc.qs);
+  let next=null; btn.onclick=()=>{ if(next){ const n=next; next=null; n(); } };
+  const click = text => new Promise(r=>{ btn.textContent=text; btn.hidden=false; btn.focus({preventScroll:true}); next=()=>{ btn.hidden=true; r(); }; });
+  fade(ov,'in'); await zoom(card, src, 'in');
+  for(const step of sc.steps){ await click(step.btn); cap.textContent = step.doing || ''; setQs(qr, []); await step.run(); cap.textContent = step.text; setQs(qr, step.qs); }
+  await click('Continue');
+  fade(ov,'out'); await zoom(card, src, 'out');
+  ov.remove(); g.spot--;
+}
+
+/* Pyruvate oxidation, one step at a time */
+function buildPox(st){
+  const enz = sOut(st,'Enzyme: pyruvate dehydrogenase','var(--muted)',124,132,226,168,'enz');
+  const C1=sAt(st,'C',92,128), C2=sAt(st,'C',122,114), C3=sAt(st,'C',152,128);
+  const O2=sAt(st,'O',122,84), Oa=sAt(st,'O',180,116), Ob=sAt(st,'O',158,156);
+  const E1=sAt(st,'E',140,128,true), E2=sAt(st,'E',152,128,true), H=sAt(st,'H',72,196,true);
+  const pyr = sOut(st,'Pyruvate · 3 carbons','var(--pyr)',134,124,128,104);
+  const nad = sBox(st,'NAD⁺','var(--nad)',282,40,true);
+  const coa = sBox(st,'CoA','var(--atomA)',284,222,false);
+  const coaTag = sTag(st,'coenzyme A (helper)',262,242);
+  const co2Tag = sTag(st,'CO₂ (leaves)',278,150); co2Tag.style.opacity='0';
+  return { title:'Pyruvate oxidation', h:248,
+    intro:'Pyruvate (3 carbons) is held in the active site of an enzyme called pyruvate dehydrogenase: a pocket shaped to fit it. Waiting nearby are an empty NAD⁺ and a helper molecule called coenzyme A (CoA).', qs:['enzyme'],
+    steps:[
+      {btn:'Remove a carbon', doing:'The enzyme snips off the end carbon…',
+       text:'The end carbon broke away with its two oxygens as CO₂, a waste gas. It left behind the electron pair from the bond that held it on (yellow). That pair now sits on the 2-carbon piece, and it is the “high-energy” pair.', qs:['co2leave','hiE'],
+       run:async()=>{ mvA(C3,278,130); mvA(Oa,258,130); mvA(Ob,298,130); E1.style.opacity='1'; E2.style.opacity='1'; setOut(pyr,114,124,104,104,'2-carbon piece'); await pause(STEP_MS); co2Tag.style.opacity='1'; }},
+      {btn:'Take the electrons', doing:'The enzyme moves the electron pair…',
+       text:'The enzyme moved that electron pair, together with a hydrogen from its surroundings, onto NAD⁺. NAD⁺ is now loaded NADH.', qs:['nad','hiE'],
+       run:async()=>{ H.style.opacity='1'; mvA(H,137,134); await pause(500); mvA(E1,274,26); mvA(E2,290,26); mvA(H,282,30); setOut(pyr,108,108,84,76); await pause(STEP_MS); [E1,E2,H].forEach(e=>e.style.opacity='0'); boxText(nad,'NADH'); nad.classList.add('loaded','glow'); }},
+      {btn:'Attach coenzyme A', doing:'Coenzyme A moves in…',
+       text:'CoA bonded where the carbon left. The 2-carbon piece is called an acetyl group, so together they are acetyl-CoA. CoA is a reusable helper, not the enzyme: it carries the acetyl to the Krebs cycle, lets go, and comes back for more.', qs:['coa'],
+       run:async()=>{ mvA(coa,160,114); coaTag.style.opacity='0'; setOut(pyr,128,108,138,64,'Acetyl-CoA'); enz.style.opacity='.35'; await pause(STEP_MS); coa.classList.add('glow'); }}
+    ]};
+}
+
+/* One turn of the Krebs cycle */
+function buildKrebs(st){
+  const CX=160, CY=140, R=66, P=(a,r)=>[CX+r*Math.sin(a*Math.PI/180), CY-r*Math.cos(a*Math.PI/180)];
+  const svgNS='http://www.w3.org/2000/svg', svg=document.createElementNS(svgNS,'svg');
+  svg.setAttribute('width','320'); svg.setAttribute('height','284'); svg.style.cssText='position:absolute;left:0;top:0';
+  svg.innerHTML=`<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--acoa)" stroke-width="5" stroke-dasharray="18 7" opacity=".45"/>`;
+  st.appendChild(svg);
+  const center = sTag(st,'4-carbon starter (oxaloacetate)',CX,CY,'big');
+  const beads=[];
+  const layout = pt => beads.forEach((b,i)=>mvA(b, pt[0]+((i%3)-1)*17, pt[1]+(Math.floor(i/3)-.5)*17));
+  for(let i=0;i<4;i++) beads.push(sAt(st,'C',CX,CY-R));
+  layout(P(0,R));
+  const ac=[sAt(st,'C',28,22), sAt(st,'C',45,22)];
+  const coa = sBox(st,'CoA','var(--atomA)',82,22,false);
+  const acTag = sTag(st,'acetyl-CoA brings 2 C',62,44);
+  const box = (a,text,c,slot)=>{ const [x,y]=P(a,114); return sBox(st,text,c,x,y,slot); };
+  const n1=box(60,'NAD⁺','var(--nad)',true), n2=box(120,'NAD⁺','var(--nad)',true), adp=box(180,'ADP','var(--adp)',false), fad=box(240,'FAD','var(--fad)',true), n3=box(300,'NAD⁺','var(--nad)',true);
+  adp.style.color='var(--ink)';
+  [n1,n2,adp,fad,n3].forEach(b=>b.classList.add('dim'));
+  const goTo = async a=>{ layout(P(a,R)); await pause(STEP_MS); };
+  const elec = async (pt,b,text)=>{
+    const es=[sAt(st,'E',pt[0]-6,pt[1]-12), sAt(st,'E',pt[0]+6,pt[1]-12), sAt(st,'H',pt[0],pt[1]-4)];
+    await pause(80); es.forEach((e,i)=>mvA(e, b._x-8+i*8, b._y)); await pause(STEP_MS);
+    es.forEach(e=>e.style.opacity='0'); b.classList.remove('dim'); b.classList.add('loaded','glow'); boxText(b,text);
+  };
+  const co2 = async (pt,a)=>{
+    const c=beads.pop(), [x,y]=P(a,116);
+    const o1=sAt(st,'O',pt[0],pt[1],true), o2=sAt(st,'O',pt[0],pt[1],true);
+    await pause(40); o1.style.opacity='1'; o2.style.opacity='1';
+    mvA(c,x,y); mvA(o1,x-18,y); mvA(o2,x+18,y); layout(pt);
+    await pause(STEP_MS); sTag(st,'CO₂',x,y+18);
+  };
+  return { title:'Krebs cycle', h:284,
+    intro:'The cycle keeps a 4-carbon molecule (oxaloacetate) that it reuses every turn. Acetyl-CoA is waiting to bring in 2 more carbons. Around the outside sit the empty carriers and the ADP that this turn will fill.', qs:['cycle'],
+    steps:[
+      {btn:'Join the cycle', doing:'The acetyl joins the starter…',
+       text:'The 2-carbon acetyl joined the 4-carbon starter, making a 6-carbon molecule (citrate). Coenzyme A let go and heads back to pick up another acetyl.', qs:['coa'],
+       run:async()=>{ beads.push(...ac); layout(P(0,R)); mvA(coa,40,22); acTag.style.opacity='0'; await pause(STEP_MS); coa.classList.add('dim'); boxText(coa,'CoA, reused'); center.textContent='6 carbons (citrate)'; }},
+      {btn:'First carbon leaves', doing:'The cycle reshapes the molecule…',
+       text:'One carbon left as CO₂, and the electrons that came off loaded an NAD⁺. 5 carbons remain.', qs:['co2leave','hiE'],
+       run:async()=>{ await goTo(60); const pt=P(60,R); await co2(pt,28); center.textContent='5 carbons'; await elec(pt,n1,'NADH'); }},
+      {btn:'Second carbon leaves', doing:'Around to the next step…',
+       text:'Another carbon left as CO₂ and another NAD⁺ was loaded. That is 2 carbons out, the same number the acetyl brought in.',
+       run:async()=>{ await goTo(120); const pt=P(120,R); await co2(pt,150); center.textContent='4 carbons'; await elec(pt,n2,'NADH'); }},
+      {btn:'Rebuild the starter', doing:'The last steps reshape the 4 carbons…',
+       text:'The rest of the cycle reshaped the 4 carbons back into the starter, making 1 ATP and loading 1 FAD and 1 more NAD⁺ on the way. One turn in total: 2 CO₂, 3 NADH, 1 FADH₂, 1 ATP. (The 2 carbons that leave in a turn aren’t exactly the 2 that came in, but the count always balances.)', qs:['atp'],
+       run:async()=>{
+         await goTo(180); adp.classList.remove('dim'); adp.style.setProperty('--c','var(--atp)'); adp.style.color='#fff'; boxText(adp,'ATP'); adp.classList.add('glow');
+         await goTo(240); await elec(P(240,R),fad,'FADH₂');
+         await goTo(300); await elec(P(300,R),n3,'NADH');
+         await goTo(0); center.textContent='4-carbon starter, ready for the next acetyl-CoA'; }}
+    ]};
+}
+
+/* ================= Tier 2: the mitochondrion ================= */
+Object.assign(SPOT_TEXT, {
+  pox:['Pyruvate has 3 carbons (the dark dots). An enzyme pulls off one carbon and a pair of electrons.',
+       'One carbon left as CO₂ and the electrons loaded an NAD⁺. The 2-carbon piece left over is attached to a helper called coenzyme A. Together they are acetyl-CoA.'],
+  krebsT:['Acetyl-CoA brings 2 carbons into the Krebs cycle, a loop of reactions that starts and ends with the same 4-carbon molecule.',
+          'By the end of one turn, 2 carbons have left as CO₂. Their electrons loaded 3 NAD⁺ and 1 FAD, the cycle made 1 ATP, and it is back to its 4-carbon start.'],
+  etcN:['NADH docks at complex I in the inner membrane and hands over its electron pair.',
+        'Each time the electrons moved to the next complex, the chain used their energy to pump H⁺ out of the matrix: 4 + 4 + 2 = 10 H⁺. The empty NAD⁺ goes back to the Krebs cycle, and the spent electrons wait at complex IV.'],
+  etcF:['FADH₂ hands its electrons over at complex II, further along the chain than NADH.',
+        'Complex II does not pump, so FADH₂’s electrons pump only 4 + 2 = 6 H⁺. That is why FADH₂ is worth less ATP than NADH.'],
+  o2x:['Electrons that reach the end of the chain need somewhere to go. Oxygen is the final electron acceptor.',
+       'Oxygen took the electrons, picked up H⁺ from the matrix and became water. Without oxygen the electrons back up and the whole chain stops.'],
+  syn:['The H⁺ you pumped is crowded outside the matrix. The only way back in is through ATP synthase.',
+       'Every 4 H⁺ flowing back turn ATP synthase like a water wheel, and each turn joins ADP and a phosphate into 1 ATP. This happens on its own now whenever 4 H⁺ are waiting.'],
+  leak:['A leak! H⁺ is slipping back into the matrix without going through ATP synthase, so its energy turns into heat instead of ATP. Tap the leak to plug it. (Plugging is a game rule; in real cells the uncoupler chemical would have to be removed.)']
+});
+const MITO_WRONG = {
+  glucose:'Glucose never gets into the mitochondrion. It is split into pyruvate in the cytoplasm first.',
+  lactate:'Lactate is a fermentation product. When oxygen is around, pyruvate comes here instead of becoming lactate.',
+  co2:'CO₂ is waste. It has no useful electrons left, so the cell breathes it out.',
+  o2:'Oxygen is used in the mitochondrion, but not by these steps. You’ll see where in the next level.',
+  nadh:'This carrier is loaded with electrons. Nothing in these steps can unload it.',
+  fadh2:'This carrier is loaded with electrons. Nothing in these steps can unload it.'
+};
+
+function startMito(i){
+  const L = LEVELS[i], etc = L.stage==='etc';
+  G = { i, L, mode:'mito', running:false, over:false, time:0, anims:0, spot:0, spotN:{},
+        pools:{atp:0, co2:0, h2o:0, heat:0, nad:L.start.nad, fad:L.start.fad},
+        car:{useN:0, useF:0, loadN:0, loadF:0}, hp:0, chain:{res:0, wait:0, acc:0},
+        holes:[], holeT:L.holes?L.holes.first:0, leakT:0,
+        tokens:[], sel:null, lock:0, krebs:{state:'idle', t:0, cyc:1.2},
+        pyrLeft:L.pyruvate||0, pyrT:0.5, o2T:1, decoyT:4, synT:0, synSlow:false,
+        stallT:0, hintOn:false, found:new Set(L.known||[]), told:{} };
+  const tanks = etc
+    ? tankHTML('pool-atp','atp') + tankHTML('pool-h2o','h2o') + tankHTML('pool-co2','co2') + (L.holes ? tankHTML('pool-heat','hplus','Leaked') : '')
+    : tankHTML('pool-co2','co2','CO₂ out') + tankHTML('pool-atp','atp');
+  const etcHTML = etc ? `<div class="etc" id="etc">
+      <div class="ims" id="ims"><div class="imsrow"><span class="lblq"><span class="label">Intermembrane space · pumped H⁺ crowds here</span>${qDot('gradient')}</span><span class="mono" id="hcount">0 H⁺</span></div><div class="hdots" id="hdots"></div></div>
+      <div class="membrane" id="membrane">
+        <div class="cx" id="cx1"><b>I</b><small>NADH docks<br>pumps 4</small></div>
+        <div class="cx" id="cx2"><b>II</b><small>FADH₂ docks<br>pumps 0</small></div>
+        <div class="cx" id="cx3"><b>III</b><small>pumps 4</small></div>
+        <div class="cx" id="cx4"><b>IV</b><small>pumps 2</small><span class="ewait" id="ewait"></span></div>
+        <div class="cx syn" id="syn"><b>ATP synthase</b><small>4 H⁺ back in → 1 ATP</small></div>
+      </div>
+      <div class="matrixlbl"><span class="lblq"><span class="label">↑ inner membrane · matrix below ↓</span>${qDot('pump')}${qDot('synthase')}${qDot('o2')}</span></div></div>` : '';
+  const krebsHTML = `<div class="machines"><div class="machine" id="krebs">
+      <div class="mhead"><span class="lblq"><h3>Krebs cycle</h3>${qDot('cycle')}</span><span class="status" id="kstat"></span></div>
+      <div class="kbody">${molSVG('krebs',40)}<div class="recipe">${L.krebsAuto ? 'Runs by itself: acetyl-CoA keeps arriving from pyruvate. Each turn uses 3 empty NAD⁺ and 1 FAD, and drops loaded carriers into the matrix.' : 'Tap an acetyl-CoA to feed it in. Each turn also uses 3 empty NAD⁺ and 1 FAD.'}</div></div>
+      <div class="prog"><i id="kprog"></i></div><div class="tray" id="ktray"></div></div></div>`;
+  const fieldHTML = `<div class="fieldhead"><span class="label">Matrix (inside the mitochondrion)</span><span class="label" id="fieldtip"></span></div>
+    <div class="field" id="field" aria-label="Mitochondrial matrix"></div><div class="msg" id="msg"></div><div id="hintbox"></div>`;
+  app.innerHTML = topBar(L) + `
+    <div class="tanks">${tanks}</div>
+    <div class="carrier" id="carrier"><div class="row"><span class="lblq"><span class="label">Electron carriers</span>${qDot('nad')}</span><span class="mono" id="carriertxt"></span></div>
+      <div class="dots" id="dots"></div><div class="dots fad" id="fdots"></div>
+      <div class="legend">○ empty · ◌ busy or on the way · ● loaded. Circles are NAD⁺, squares are FAD.</div></div>
+    ${etc ? etcHTML + fieldHTML + krebsHTML : krebsHTML + fieldHTML}
+    <div class="rxbox"><span class="label">Reactions</span><div id="rxlist"></div>${atomKey}</div>`;
+  wireTop(); renderRx();
+  for(let j=0;j<(L.start.nadhTok||0);j++){ spawnToken('nadh'); G.car.loadN++; }
+  for(let j=0;j<(L.start.fadh2Tok||0);j++){ spawnToken('fadh2'); G.car.loadF++; }
+  briefing(i);
+}
+
+function tapMito(t){
+  if(!G || !G.running || G.over || t.busy || G.lock>0 || G.spot>0) return;
+  const L = G.L, k = t.k;
+  if(L.stage==='krebs'){
+    if(k==='pyr') return pox(t);
+    if(k==='acoa') return feedKrebs(t);
+  } else {
+    if(k==='nadh' || k==='fadh2') return unload(t);
+    if(k==='o2') return giveO2(t);
+  }
+  wrongTap(t, MITO_WRONG[k] || 'That molecule has no job here.');
+}
+function wrongTap(t, why){
+  const g = G; g.lock = 0.6; t.el.classList.add('wrong'); flash(why,'bad');
+  setTimeout(()=>{ t.el.classList.remove('wrong'); if(t.decoy && g.tokens.includes(t)){ t.el.remove(); g.tokens = g.tokens.filter(x=>x!==t); } }, 700);
+}
+
+/* Pyruvate oxidation: pyruvate gives up a carbon (CO₂) and an electron pair (to NAD⁺), leaving acetyl-CoA */
+async function pox(t){
+  const g = G;
+  if(g.pools.nad<1){ flash('There is no empty NAD⁺ left to take the electrons.','bad'); return; }
+  g.pools.nad--; g.car.useN++; g.anims++;
+  detach(t); t.y = Math.max(t.y, 40); place(t);
+  const quick = (g.spotN.pox||0) >= SPOT_SLOW; g.spotN.pox = (g.spotN.pox||0)+1;
+  await pause(60);
+  if(quick) await spotlight(g, {title:RXN.pox.name, srcs:[t.el,$('carrier')], dests:[t.el], ins:[['pyr'],['nad']], hop:[0,1], swaps:{0:['acoa'],1:['nadh']}, add:[['co2']],
+    text:SPOT_TEXT.pox, go:'Take the electrons', onSwap:()=>setTok(t,'acoa')}, quick);
+  else await sceneSpot(g, buildPox, t.el);
+  if(G!==g) return;
+  setTok(t,'acoa');
+  if(G!==g) return;
+  discover('pox');
+  t.w = t.el.offsetWidth;
+  const [fw] = fieldSize();
+  if(t.x+t.w > fw-2){ t.x = fw-t.w-2; place(t); }
+  const nx = t.x+t.w+8 < fw-110 ? t.x+t.w+8 : Math.max(2, t.x-118);
+  spawnToken('nadh', nx, t.y); g.car.useN--; g.car.loadN++;
+  flyChips('co2',1, center(t.el), $('pool-co2'), ()=>{ g.pools.co2 += 1; });
+  t.busy = false; t.el.classList.remove('busy','moving'); g.tokens.push(t);
+  g.anims--;
+}
+
+/* Krebs cycle */
+function feedKrebs(t){
+  const g = G, kr = g.krebs;
+  if(kr.state!=='idle'){ flash('The cycle is mid-turn. Feed in the next acetyl-CoA when it finishes.','bad'); return; }
+  if(g.pools.nad<3 || g.pools.fad<1){ flash(`A turn needs 3 empty NAD⁺ and 1 FAD. Right now there are ${g.pools.nad} NAD⁺ and ${g.pools.fad} FAD.`,'bad'); return; }
+  const from = center(t.el); detach(t); t.el.remove();
+  krebsStart(g, true, from);
+}
+async function krebsStart(g, manual, from){
+  const kr = g.krebs; kr.state = 'turning'; kr.t = 0; kr.cyc = manual ? 1.2 : (g.L.krebsCycle||3.5);
+  g.pools.nad -= 3; g.pools.fad -= 1; g.car.useN += 3; g.car.useF += 1;
+  const ke = $('krebs');
+  showDelta($('carrier'),'−3 NAD⁺, −1 FAD','nad');
+  for(let j=0;j<3;j++) flyChip('nad', center($('carrier')), center(ke), j*120, 600);
+  flyChip('fad', center($('carrier')), center(ke), 360, 600);
+  if(!manual) return;
+  g.anims++;
+  if(from) await flyChip('acoa', from, center(ke), 0, 600);
+  if(G!==g) return;
+  const quick = (g.spotN.krebsT||0) >= SPOT_SLOW; g.spotN.krebsT = (g.spotN.krebsT||0)+1;
+  if(quick) await spotlight(g, {title:'Krebs cycle', srcs:[ke], dests:[ke], ins:[['acoa'],['nad',3],['fad']], hop:[0,1], swaps:{0:['co2',2],1:['nadh',3],2:['fadh2']}, add:[['atp']],
+    text:SPOT_TEXT.krebsT, go:'Turn the cycle'}, quick);
+  else await sceneSpot(g, buildKrebs, ke);
+  if(G!==g) return;
+  discover('krebsT'); g.anims--;
+}
+async function krebsDone(g){
+  g.anims++;
+  const tray = $('ktray');
+  tray.innerHTML = [['co2',2],['nadh',3],['fadh2',1],['atp',1]].map(([k,n])=>`<span class="grp" data-k="${k}" style="--c:${MOLS[k].c}">${molSVG(k,18)}${lbl(k,n)}</span>`).join('');
+  await wait(900); if(G!==g) return;
+  const grp = k => tray.querySelector(`[data-k="${k}"]`);
+  const fC=center(grp('co2')), fN=center(grp('nadh')), fF=center(grp('fadh2')), fA=center(grp('atp'));
+  const ps = [ flyChips('co2',2, fC, $('pool-co2'), ()=>{ g.pools.co2 += 2; }), flyChips('atp',1, fA, $('pool-atp'), ()=>{ g.pools.atp += 1; }) ];
+  const f = $('field'), fr = f.getBoundingClientRect(), fw = f.clientWidth;
+  ['nadh','nadh','nadh','fadh2'].forEach((k,j)=>{
+    const x = clamp(fw*(0.04+0.23*j) + (Math.random()-.5)*16, 2, fw-110), y = 8 + (j%2)*44;
+    ps.push(flyChip(k, k==='nadh'?fN:fF, [fr.left+x+50, fr.top+y+18], j*140, 850).then(()=>{
+      if(G!==g || g.over) return;
+      spawnToken(k, x, y);
+      if(k==='nadh'){ g.car.useN--; g.car.loadN++; } else { g.car.useF--; g.car.loadF++; }
+    }));
+  });
+  tray.innerHTML = ''; g.krebs.state = 'idle'; g.krebs.t = 0;
+  await Promise.all(ps); g.anims--;
+}
+
+/* Electron transport chain: a loaded carrier drops its electrons, which pump H⁺ at each complex on the way to complex IV */
+async function unload(t){
+  const g = G, isN = t.k==='nadh', key = isN ? 'etcN' : 'etcF';
+  if(g.chain.res>=4){ flash('The chain is backed up. The electrons at complex IV have nowhere to go, so no carrier can unload. Complex IV needs O₂.','bad'); bumpEl($('cx4')); return; }
+  g.chain.res++; g.anims++;
+  if(isN){ g.car.loadN--; g.car.useN++; } else { g.car.loadF--; g.car.useF++; }
+  const from = center(t.el), kind = t.k; detach(t); t.el.remove();
+  const quick = (g.spotN[key]||0) >= SPOT_SLOW; g.spotN[key] = (g.spotN[key]||0)+1;
+  let np = null;
+  if(!quick){
+    $('etc').scrollIntoView({block:'center', behavior:reduceMotion?'auto':'smooth'});
+    np = narrPanel(g, RXN[key].name);
+    await narrStep(np, SPOT_TEXT[key][0], 'Follow the electrons', ['hiE']); if(G!==g) return;
+    np.querySelector('p').textContent = 'Watch the electron pair move along the chain, and count the H⁺ pumped up at each stop.'; setQs(np.querySelector('.qrow'), []);
+  }
+  const D = quick ? 1 : 1.8, entry = $(isN?'cx1':'cx2');
+  await flyChip(kind, from, center(entry), 0, 550*D); if(G!==g) return;
+  flyChips(isN?'nad':'fad',1, center(entry), $('carrier'), ()=>{ if(isN){ g.pools.nad++; g.car.useN--; } else { g.pools.fad++; g.car.useF--; } });
+  const steps = isN ? [['cx1',4],['cx3',4],['cx4',2]] : [['cx2',0],['cx3',4],['cx4',2]];
+  for(let s=0;s<steps.length;s++){
+    const [id,n] = steps[s], el = $(id); if(!el) return;
+    if(s>0){ await flyChip('e2', center($(steps[s-1][0])), center(el), 0, 380*D); if(G!==g) return; }
+    el.classList.add('hot'); setTimeout(()=>el.classList.remove('hot'), 700);
+    if(n){ const p = flyChips('hplus', n, center(el), $('ims'), ()=>{ g.hp += n; }); if(!quick) await p; }
+    else if(!quick) await pause(600);
+    if(G!==g) return;
+  }
+  g.chain.wait++;
+  discover(key);
+  if(np){ await narrStep(np, SPOT_TEXT[key][1], 'Continue', ['pump','o2']); narrEnd(g, np); }
+  g.anims--;
+}
+/* Oxygen takes up to 2 electron pairs waiting at complex IV and becomes water */
+async function giveO2(t){
+  const g = G;
+  if(g.chain.wait<1){ flash('No electrons are waiting at complex IV yet. Unload a loaded carrier first.','bad'); return; }
+  const n = Math.min(2, g.chain.wait); g.chain.wait -= n; g.chain.res -= n; g.anims++;
+  detach(t);
+  const quick = (g.spotN.o2x||0) >= SPOT_SLOW; g.spotN.o2x = (g.spotN.o2x||0)+1;
+  const cx4 = $('cx4');
+  await spotlight(g, {title:RXN.o2x.name, srcs:[t.el,cx4], dests:[cx4], ins:[['o2'],['e2',n]], hop:[1,0], swaps:{0:['h2o',n],1:null},
+    text:SPOT_TEXT.o2x, go:'Hand over the electrons', qs:['o2','hiE']}, quick);
+  if(G!==g) return;
+  discover('o2x');
+  t.el.remove();
+  flyChips('h2o', n, center(cx4), $('pool-h2o'), ()=>{ g.pools.h2o += n; });
+  if(n===1){ g.chain.acc += 1; flash('That O₂ had room for 2 electron pairs. Half of it is still waiting at complex IV for the next pair.','good'); }
+  g.anims--;
+}
+/* ATP synthase: 4 H⁺ back into the matrix make 1 ATP */
+function synth(g){
+  g.hp -= 4;
+  if(!g.found.has('syn') && !g.synSlow){ g.synSlow = true; synthSlow(g); return; }
+  const syn = $('syn'); syn.classList.add('hot'); setTimeout(()=>syn.classList.remove('hot'), 400);
+  flyChips('hplus',4, center($('ims')), syn, null, '').then(()=>{ if(G===g) flyChips('atp',1, center(syn), $('pool-atp'), ()=>{ g.pools.atp += 1; }); });
+}
+async function synthSlow(g){
+  g.anims++;
+  $('etc').scrollIntoView({block:'center', behavior:reduceMotion?'auto':'smooth'});
+  const np = narrPanel(g, RXN.syn.name);
+  await narrStep(np, SPOT_TEXT.syn[0], 'Let the H⁺ back in', ['gradient']); if(G!==g) return;
+  np.querySelector('p').textContent = 'Watch 4 H⁺ flow back through ATP synthase…'; setQs(np.querySelector('.qrow'), []);
+  const syn = $('syn');
+  await flyChips('hplus',4, center($('ims')), syn, null, ''); if(G!==g) return;
+  syn.classList.add('hot');
+  await flyChips('atp',1, center(syn), $('pool-atp'), ()=>{ g.pools.atp += 1; }); if(G!==g) return;
+  syn.classList.remove('hot');
+  discover('syn');
+  await narrStep(np, SPOT_TEXT.syn[1], 'Continue', ['synthase','atp']); narrEnd(g, np); g.anims--;
+}
+/* Uncoupler leaks */
+function makeHole(g){
+  const m = $('membrane'); if(!m) return;
+  const b = document.createElement('button'); b.className='hole'; b.type='button'; b.textContent='leak'; b.setAttribute('aria-label','Plug the leak');
+  b.style.left = (6 + Math.random()*80)+'%'; m.appendChild(b);
+  const h = {el:b}; g.holes.push(h);
+  b.onclick = ()=>{ if(!g.running || g.over || g.spot>0) return; b.remove(); g.holes = g.holes.filter(x=>x!==h); flash('Leak plugged.','good'); };
+  if(!g.told.leak){
+    g.told.leak = true;
+    (async()=>{ $('etc').scrollIntoView({block:'center', behavior:reduceMotion?'auto':'smooth'}); const np = narrPanel(g,'A leak in the membrane'); await narrStep(np, SPOT_TEXT.leak[0], 'Got it', ['uncoupler']); if(G===g) narrEnd(g, np); })();
+  }
+}
+
+function tickMito(dt){
+  if(G.spot>0) return; // the clock and everything else wait while a step is being explained
+  const g = G, L = g.L, p = g.pools; g.time += dt;
+  if(g.lock>0) g.lock -= dt;
+  if(L.stage==='krebs' && g.pyrLeft>0){ g.pyrT -= dt; if(g.pyrT<=0){ g.pyrT = L.inflowEvery; g.pyrLeft--; spawnToken('pyr', 4+Math.random()*60, 4); } }
+  if(L.stage==='etc'){ g.o2T -= dt; if(g.o2T<=0){ g.o2T = L.o2Every; if(g.tokens.filter(t=>t.k==='o2').length<3) spawnToken('o2'); } }
+  g.decoyT -= dt;
+  if(g.decoyT<=0){ g.decoyT = 5 + Math.random()*3; if(L.decoys && g.tokens.filter(t=>t.decoy).length<2) spawnToken(L.decoys[Math.floor(Math.random()*L.decoys.length)], null, null, true); }
+  const kr = g.krebs;
+  if(kr.state==='idle' && L.krebsAuto && p.nad>=3 && p.fad>=1) krebsStart(g, false);
+  if(kr.state==='turning'){ kr.t += dt; if(kr.t>=kr.cyc){ kr.state='unloading'; krebsDone(g); } }
+  if(L.stage==='etc'){
+    if(g.chain.acc>0 && g.chain.wait>0){ g.chain.acc--; g.chain.wait--; g.chain.res--; flyChips('h2o',1, center($('cx4')), $('pool-h2o'), ()=>{ p.h2o += 1; }); }
+    g.synT += dt; if(g.hp>=4 && g.synT>=0.6){ g.synT = 0; synth(g); }
+    if(L.holes){
+      g.holeT -= dt; if(g.holeT<=0){ g.holeT = L.holes.every; if(g.holes.length<L.holes.max) makeHole(g); }
+      g.leakT += dt;
+      if(g.leakT>=L.holes.rate){ g.leakT = 0; g.holes.forEach(h=>{ if(g.hp>0){ g.hp--; p.heat++; flyChip('hplus', center($('ims')), center(h.el), 0, 450); } }); }
+    }
+  }
+  const [w,h] = fieldSize();
+  for(const t of [...g.tokens]){
+    t.age += dt;
+    if(t.decoy && t.age>16 && !t.busy){ t.el.remove(); g.tokens = g.tokens.filter(x=>x!==t); continue; }
+    if(t.decoy && t.age>13) t.el.classList.add('fade');
+    if(t.busy) continue;
+    t.x += t.vx*dt; t.y += t.vy*dt;
+    if(t.x<2){t.x=2;t.vx=Math.abs(t.vx);} if(t.x>w-t.w-2){t.x=w-t.w-2;t.vx=-Math.abs(t.vx);}
+    if(t.y<2){t.y=2;t.vy=Math.abs(t.vy);} if(t.y>h-t.h-2){t.y=h-t.h-2;t.vy=-Math.abs(t.vy);}
+    place(t);
+  }
+  if(L.goal.type==='co2' && p.co2>=L.goal.target && g.anims===0) return endLevel(true);
+  if(L.goal.type==='atp' && p.atp>=L.goal.target) return endLevel(true);
+  if(L.goal.limit && g.time>=L.goal.limit) return endLevel(false,'Time ran out before the ATP tank filled.');
+  const active = g.anims>0 || kr.state!=='idle' || g.hp>=4 || (L.stage==='krebs' && g.pyrLeft>0);
+  if(!active){ g.stallT += dt; if(g.stallT>6 && !g.hintOn){ g.hintOn = true; $('hintbox').innerHTML = `<div class="hint"><strong>Things have stopped.</strong> ${L.hint}</div>`; } }
+  else g.stallT = 0;
+}
+
+function renderMito(){
+  const g = G, L = g.L, p = g.pools;
+  ['atp','co2','h2o','heat'].forEach(k=>{ const el=$('pool-'+k); if(!el) return; const v=el.querySelector('.v'), s=String(p[k]); if(v.textContent!==s) v.textContent=s; });
+  const key = [p.nad,g.car.useN,g.car.loadN,p.fad,g.car.useF,g.car.loadF].join('/');
+  if(cache.car!==key){
+    cache.car = key;
+    const dots = (e,u,l)=>'<span></span>'.repeat(Math.max(0,e))+'<span class="busy"></span>'.repeat(Math.max(0,u))+'<span class="full"></span>'.repeat(Math.max(0,l));
+    $('dots').innerHTML = dots(p.nad, g.car.useN, g.car.loadN);
+    $('fdots').innerHTML = dots(p.fad, g.car.useF, g.car.loadF);
+    setText('carriertxt', `NAD⁺ ${p.nad} empty, ${g.car.loadN} loaded · FAD ${p.fad} empty, ${g.car.loadF} loaded`);
+    $('carrier').classList.toggle('empty', (p.nad<3 || p.fad<1) && (g.car.loadN+g.car.loadF)>0);
+  }
+  let frac;
+  if(L.goal.type==='co2'){ frac = p.co2/L.goal.target; setText('goaltxt', `Carbons out as CO₂: ${p.co2} / ${L.goal.target}`); setText('clock', fmt(g.time)); }
+  else { frac = p.atp/L.goal.target; setText('goaltxt', `ATP ${p.atp} / ${L.goal.target}`); setText('clock', L.goal.limit ? fmt(L.goal.limit-g.time)+' left' : fmt(g.time)); }
+  $('goalbar').style.width = clamp(frac*100,0,100)+'%';
+  const kr = g.krebs, ke = $('krebs');
+  let ks, kc = 'machine';
+  if(kr.state==='turning'){ ks = 'Turning'; kc += ' running'; }
+  else if(kr.state==='unloading'){ ks = 'Done!'; kc += ' running'; }
+  else if(p.nad<3 || p.fad<1){ ks = 'Waiting for empty carriers'; kc += ' waiting'; }
+  else ks = L.krebsAuto ? 'Ready' : 'Waiting for acetyl-CoA';
+  setText('kstat', ks); if(ke.className!==kc) ke.className = kc;
+  $('kprog').style.width = (kr.state==='turning' ? clamp(kr.t/kr.cyc,0,1)*100 : kr.state==='unloading' ? 100 : 0)+'%';
+  if(L.stage==='etc'){
+    setText('hcount', `${g.hp} H⁺`);
+    if(cache.hd!==g.hp){ cache.hd = g.hp; $('hdots').innerHTML = '<i></i>'.repeat(Math.min(g.hp,60)) + (g.hp>60 ? `<span class="legend">+${g.hp-60}</span>` : ''); }
+    const ew = g.chain.wait+'/'+g.chain.acc;
+    if(cache.ew!==ew){ cache.ew = ew; $('ewait').innerHTML = '<i></i>'.repeat(g.chain.wait) + (g.chain.acc ? '<small>½ O₂</small>' : ''); }
+    $('cx4').classList.toggle('full', g.chain.res>=4);
+  }
+  setText('fieldtip', L.stage==='krebs' ? 'Tap a molecule to use it' : 'Tap a loaded carrier, or an O₂');
+}
+
+/* ================= End of level ================= */
+function endLevel(win, reason){
+  G.over = true; G.running = false;
+  const L = G.L;
+  if(win){
+    let stars, how, tip='';
+    if(L.goal.type==='runs'){ stars = G.runs>=L.stars[1]?3:G.runs>=L.stars[0]?2:1; how=`${G.runs} runs: ${G.made.atp} ATP made, ${G.made.spent} spent, so the cell gained ${G.made.atp-G.made.spent}.`; if(stars<3) tip=`Three stars: ${L.stars[1]} runs in one shift`; }
+    else if(L.goal.type==='survive'){ stars = G.pools.atp>=L.stars[1]?3:G.pools.atp>=L.stars[0]?2:1; how=`Finished with ${G.pools.atp} ATP to spare.`; if(stars<3) tip=`Three stars: finish with ${L.stars[1]}+ ATP left`; }
+    else { stars = G.time<=L.stars[0]?3:G.time<=L.stars[1]?2:1; how=`Done in ${Math.ceil(G.time)} seconds.`; if(stars<3) tip=`Three stars: finish in ${L.stars[0]} s or less`; }
+    progress[G.i] = Math.max(progress[G.i]||0, stars); saveProgress();
+    const next = G.i < LEVELS.length-1;
+    const rxs = (L.summary || (L.discover&&L.discover.length ? L.discover : null) || (L.mode==='assemble'?['glyco']:['lactic'])).map(k=>`<div class="rx"><strong>${RXN[k].name}</strong>${eqHTML(RXN[k])}</div>`).join('');
+    modal(`<div class="label">Shift complete</div><h2>${L.name}</h2>
+      <div class="bigstars">${starHTML(stars,'')}</div><p style="text-align:center">${how}</p>${tip?`<p class="label" style="text-align:center">${tip}</p>`:''}
+      <div class="lesson"><strong>What happened:</strong> ${L.lesson}</div>${rxs}
+      <div class="actions"><button class="btn ghost" id="lvls">All levels</button><button class="btn ghost" id="replay">Replay</button>${next?'<button class="btn" id="next">Next level</button>':'<button class="btn" id="home">Finish tier</button>'}</div>`, ()=>{
+        $('replay').onclick=()=>startLevel(G.i); $('lvls').onclick=()=>showHome();
+        const n=$('next'); if(n) n.onclick=()=>startLevel(G.i+1);
+        const h=$('home'); if(h) h.onclick=()=>showHome();
+      });
+  } else {
+    modal(`<div class="label">Shift over</div><h2>${reason}</h2><p>${L.hint}</p>
+      <div class="actions"><button class="btn ghost" id="lv">All levels</button><button class="btn" id="retry">Try again</button></div>`, ()=>{
+        $('retry').onclick=()=>startLevel(G.i);
+        $('lv').onclick=()=>showHome();
+      });
+  }
+}
+
+/* ================= Modal and loop ================= */
+function modal(html, wire){
+  layer.innerHTML = `<div class="overlay"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  wire && wire();
+  const f = layer.querySelector('.btn:not(.ghost)') || layer.querySelector('.btn'); f && f.focus({preventScroll:true});
+}
+function closeModal(){ layer.innerHTML=''; }
+function loop(t){
+  const dt = Math.min(0.1, (t-lastT)/1000 || 0); lastT = t;
+  if(G && G.running && !G.over){ if(G.mode==='assemble') tickAssemble(dt); else if(G.mode==='mito') tickMito(dt); else tickHands(dt); }
+  if(G && !G.over){
+    if(G.mode==='assemble' && $('stream')) renderAssemble();
+    if(G.mode==='hands' && $('field')) renderHands();
+    if(G.mode==='mito' && $('field')) renderMito();
+  }
+  requestAnimationFrame(loop);
+}
+document.addEventListener('visibilitychange', ()=>{ lastT = performance.now(); });
+showHome();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
